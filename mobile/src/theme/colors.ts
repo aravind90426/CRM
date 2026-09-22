@@ -65,4 +65,15 @@ export const colors = {
   // Dialpad / Actions
   callGreen: '#22C55E',
   callRed: '#DC2626',
+
+  // Attendance Check-In / Check-Out Pastel States
+  attendanceCheckInNeutralBg: '#FFFFFF',
+  attendanceCheckInNeutralBorder: 'rgba(255, 255, 255, 0.6)',
+  attendanceCheckInNeutralText: '#334155',
+  attendanceCheckInActiveBg: '#DCFCE7',
+  attendanceCheckInActiveBorder: '#86EFAC',
+  attendanceCheckInActiveText: '#166534',
+  attendanceCheckOutBg: '#FEE2E2',
+  attendanceCheckOutBorder: '#FECACA',
+  attendanceCheckOutText: '#991B1B',
 };

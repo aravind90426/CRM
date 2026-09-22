@@ -151,7 +151,16 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
                 : styles.badgeNotClocked,
             ]}
           >
-            <Text style={styles.workingBadgeText}>
+            <Text
+              style={[
+                styles.workingBadgeText,
+                isClockedOut
+                  ? styles.badgeCompletedText
+                  : isClockedIn
+                  ? styles.badgeWorkingText
+                  : styles.badgeNotClockedText,
+              ]}
+            >
               {isClockedOut
                 ? attendance?.status === 'HALF_DAY'
                   ? 'Half Day'
@@ -192,8 +201,8 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
       <View style={styles.actionRow}>
         <TouchableOpacity
           style={[
-            styles.secondaryBtn,
-            isClockedIn && styles.secondaryBtnDisabled,
+            styles.checkInBtn,
+            isClockedIn ? styles.checkInBtnActive : styles.checkInBtnNeutral,
           ]}
           onPress={handleClockIn}
           disabled={isClockedIn || loadingAction !== null}
@@ -202,24 +211,33 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
           <Ionicons
             name={isClockedIn ? 'checkmark-circle-outline' : 'enter-outline'}
             size={16}
-            color="#FFFFFF"
+            color={isClockedIn ? colors.attendanceCheckInActiveText : colors.attendanceCheckInNeutralText}
           />
-          <Text style={styles.secondaryBtnText}>
+          <Text
+            style={[
+              styles.btnText,
+              isClockedIn ? styles.checkInTextActive : styles.checkInTextNeutral,
+            ]}
+          >
             {loadingAction === 'clockIn' ? 'Punching...' : isClockedIn ? 'Clocked In' : 'Clock In'}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[
-            styles.clockOutBtn,
-            (!isClockedIn || isClockedOut) && styles.clockOutBtnDisabled,
+            styles.checkOutBtn,
+            (!isClockedIn || isClockedOut) && styles.checkOutBtnDisabled,
           ]}
           onPress={handleClockOut}
           disabled={!isClockedIn || isClockedOut || loadingAction !== null}
           activeOpacity={0.8}
         >
-          <Ionicons name="exit-outline" size={16} color="#FFFFFF" />
-          <Text style={styles.clockOutBtnText}>
+          <Ionicons
+            name="exit-outline"
+            size={16}
+            color={colors.attendanceCheckOutText}
+          />
+          <Text style={[styles.btnText, styles.checkOutText]}>
             {loadingAction === 'clockOut' ? 'Processing...' : isClockedOut ? 'Clocked Out' : 'Clock Out'}
           </Text>
         </TouchableOpacity>
@@ -273,18 +291,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: spacing.borderRadius.pill,
+    borderWidth: 1,
   },
   badgeWorking: {
-    backgroundColor: '#10B981',
+    backgroundColor: colors.attendanceCheckInActiveBg,
+    borderColor: colors.attendanceCheckInActiveBorder,
+  },
+  badgeWorkingText: {
+    color: colors.attendanceCheckInActiveText,
   },
   badgeCompleted: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: colors.attendanceCheckOutBg,
+    borderColor: colors.attendanceCheckOutBorder,
+  },
+  badgeCompletedText: {
+    color: colors.attendanceCheckOutText,
   },
   badgeNotClocked: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  badgeNotClockedText: {
+    color: '#FFFFFF',
   },
   workingBadgeText: {
-    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -335,7 +365,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
   },
-  secondaryBtn: {
+  checkInBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -343,19 +373,17 @@ const styles = StyleSheet.create({
     gap: 6,
     height: 42,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  secondaryBtnDisabled: {
-    opacity: 0.85,
+  checkInBtnNeutral: {
+    backgroundColor: colors.attendanceCheckInNeutralBg,
+    borderColor: colors.attendanceCheckInNeutralBorder,
   },
-  secondaryBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
+  checkInBtnActive: {
+    backgroundColor: colors.attendanceCheckInActiveBg,
+    borderColor: colors.attendanceCheckInActiveBorder,
   },
-  clockOutBtn: {
+  checkOutBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -363,16 +391,24 @@ const styles = StyleSheet.create({
     gap: 6,
     height: 42,
     borderRadius: 12,
-    backgroundColor: '#9333EA',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: colors.attendanceCheckOutBg,
+    borderColor: colors.attendanceCheckOutBorder,
   },
-  clockOutBtnDisabled: {
-    opacity: 0.6,
+  checkOutBtnDisabled: {
+    opacity: 0.5,
   },
-  clockOutBtnText: {
-    color: '#FFFFFF',
+  btnText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  checkInTextNeutral: {
+    color: colors.attendanceCheckInNeutralText,
+  },
+  checkInTextActive: {
+    color: colors.attendanceCheckInActiveText,
+  },
+  checkOutText: {
+    color: colors.attendanceCheckOutText,
   },
 });

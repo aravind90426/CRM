@@ -28,12 +28,28 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     if (key === 'NOT_ATTENDED') return 'Not Attended';
     if (key === 'HALF_DAY') return 'Half Day';
     if (key === 'NOT_CLOCKED_IN') return 'Not Clocked In';
+    if (key === 'CLOCKED_IN') return 'Clocked In';
+    if (key === 'CHECKED_IN') return 'Checked In';
+    if (key === 'CLOCKED_OUT') return 'Clocked Out';
+    if (key === 'CHECKED_OUT') return 'Checked Out';
     if (key === 'FOLLOW_UP') return 'Follow-up';
     if (key === 'IN_PROGRESS') return 'In Progress';
     return clean || label;
   };
 
   const getPalette = () => {
+    if (key === 'CLOCKED_IN' || key === 'CHECKED_IN') {
+      return { bg: colors.attendanceCheckInActiveBg, text: colors.attendanceCheckInActiveText, dot: colors.attendanceCheckInActiveText, border: colors.attendanceCheckInActiveBorder };
+    }
+
+    if (key === 'CLOCKED_OUT' || key === 'CHECKED_OUT') {
+      return { bg: colors.attendanceCheckOutBg, text: colors.attendanceCheckOutText, dot: colors.attendanceCheckOutText, border: colors.attendanceCheckOutBorder };
+    }
+
+    if (key === 'NOT_CLOCKED_IN') {
+      return { bg: colors.surfaceMuted, text: colors.textSecondary, dot: colors.textMuted, border: colors.border };
+    }
+
     if (
       variant === 'danger' ||
       key === 'NOT_ATTENDED' ||
@@ -72,8 +88,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
       key === 'FOLLOW_UP' ||
       key === 'IN_PROGRESS' ||
       key === 'PENDING' ||
-      key === 'BUSY' ||
-      key === 'NOT_CLOCKED_IN'
+      key === 'BUSY'
     ) {
       return { bg: colors.warningLight, text: colors.warning, dot: colors.warning, border: 'rgba(217, 119, 6, 0.2)' };
     }

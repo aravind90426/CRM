@@ -40,6 +40,7 @@ public class DashboardServiceImpl implements DashboardService {
         long totalUsers = userRepository.count();
         long activeUsers = userRepository.findByStatus("ACTIVE").size();
         long totalProjects = projectRepository.count();
+        long activeProjects = projectRepository.countByStatus("ACTIVE");
         long totalLeads = leadRepository.count();
         long assignedLeads = leadRepository.countAssignedLeads();
         long unassignedLeads = totalLeads - assignedLeads;
@@ -49,6 +50,11 @@ public class DashboardServiceImpl implements DashboardService {
         long missedCalls = callRepository.countByCallStatus("MISSED");
         long noAnswerCalls = callRepository.countByCallStatus("NO_ANSWER");
         long busyCalls = callRepository.countByCallStatus("BUSY");
+
+        // Calls logged today (org-wide)
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
+        long callsToday = callRepository.countByCreatedAtBetween(startOfDay, endOfDay);
 
         long interestedLeads = leadRepository.countByBusinessOutcome("INTERESTED");
         long followUpsPending = followUpRepository.countByStatus("PENDING");
@@ -80,10 +86,12 @@ public class DashboardServiceImpl implements DashboardService {
                 .totalUsers(totalUsers)
                 .activeUsers(activeUsers)
                 .totalProjects(totalProjects)
+                .activeProjects(activeProjects)
                 .totalLeads(totalLeads)
                 .assignedLeads(assignedLeads)
                 .unassignedLeads(unassignedLeads)
                 .totalCalls(totalCalls)
+                .callsToday(callsToday)
                 .connectedCalls(connectedCalls)
                 .missedCalls(missedCalls)
                 .noAnswerCalls(noAnswerCalls)

@@ -290,6 +290,21 @@ export const dashboardApi = {
   },
 };
 
+export const attendanceApi = {
+  getTodayAttendance: async (): Promise<any> => {
+    const res = await apiClient.get<ApiResponse<any>>('/attendance/today');
+    return res.data.data;
+  },
+  clockIn: async (): Promise<any> => {
+    const res = await apiClient.post<ApiResponse<any>>('/attendance/clock-in');
+    return res.data.data;
+  },
+  clockOut: async (): Promise<any> => {
+    const res = await apiClient.post<ApiResponse<any>>('/attendance/clock-out');
+    return res.data.data;
+  },
+};
+
 export const reportsApi = {
   getLeadReport: async (params?: { projectId?: number; startDate?: string; endDate?: string }) => {
     const res = await apiClient.get<ApiResponse<any>>('/reports/leads', { params });

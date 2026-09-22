@@ -24,11 +24,15 @@ public class DashboardSummaryResponse {
 
     // Calls metrics
     private long totalCalls;
+    private long callsToday;
     private long connectedCalls;
     private long missedCalls;
     private long noAnswerCalls;
     private long busyCalls;
     private long totalDurationSeconds;
+
+    // Projects
+    private long activeProjects;
 
     // Outcomes & Conversions
     private long interestedLeads;

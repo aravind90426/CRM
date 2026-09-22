@@ -18,6 +18,7 @@ import { MeqHeader } from '../../components/common/MeqHeader';
 import { GradientView } from '../../components/common/GradientView';
 import { IconTile } from '../../components/common/IconTile';
 import { LoadingState } from '../../components/common/LoadingState';
+import { AttendanceCard } from '../../components/attendance/AttendanceCard';
 import { dashboardApi } from '../../api/dashboardApi';
 import { projectsApi } from '../../api/projectsApi';
 import { useAuth } from '../../context/AuthContext';
@@ -101,6 +102,19 @@ export const AdminDashboardScreen: React.FC = () => {
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* Section: Greeting Row */}
+        <View style={styles.greetingRow}>
+          <View style={styles.greetingLeft}>
+            <Text style={styles.greetingTitle}>Hello, {user?.name || 'Admin'} 👋</Text>
+            <Text style={styles.greetingSubtitle}>Admin Dashboard · {new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</Text>
+          </View>
+        </View>
+
+        {/* Section: Attendance Card */}
+        <AttendanceCard
+          onViewHistory={() => navigation.navigate('AttendanceHistory')}
+        />
+
         {/* Banner: Revenue & Conversion */}
         <View style={styles.bannerCard}>
           <View style={styles.bannerHeader}>
@@ -263,6 +277,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
     paddingBottom: spacing.xl,
+  },
+  greetingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.normal,
+    marginTop: 2,
+  },
+  greetingLeft: {
+    flex: 1,
+  },
+  greetingTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
+  },
+  greetingSubtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   bannerCard: {
     padding: spacing.md,

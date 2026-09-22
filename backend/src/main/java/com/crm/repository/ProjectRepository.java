@@ -20,4 +20,5 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
                                  Pageable pageable);
 
     List<Project> findByStatus(String status);
+    long countByStatus(String status);
 }

@@ -12,23 +12,37 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CallCreateRequest {
-    @NotNull(message = "Lead ID is required")
     private Long leadId;
+    private String phoneNumber;
+    private String callDirection; // OUTBOUND, INBOUND
+    private Boolean isConnected;
 
     private LocalDateTime startedAt;
     private LocalDateTime endedAt;
 
-    @NotNull(message = "Duration in seconds is required")
     private Integer durationSeconds;
-
-    @NotBlank(message = "Call status is required")
-    private String callStatus; // CONNECTED, MISSED, NO_ANSWER, BUSY, FAILED
-
-    private String businessOutcome; // INTERESTED, NOT_INTERESTED, FOLLOW_UP, WRONG_NUMBER, JUNK, CONVERTED
+    private String callStatus; // CONNECTED, MISSED, etc. or calculated status
+    private String businessOutcome;
     private String notes;
 
     // Optional immediate follow-up creation
     private boolean createFollowUp;
     private LocalDateTime followUpTime;
     private String followUpNotes;
+
+    public CallCreateRequest(Long leadId, LocalDateTime startedAt, LocalDateTime endedAt,
+                             Integer durationSeconds, String callStatus, String businessOutcome,
+                             String notes, boolean createFollowUp, LocalDateTime followUpTime,
+                             String followUpNotes) {
+        this.leadId = leadId;
+        this.startedAt = startedAt;
+        this.endedAt = endedAt;
+        this.durationSeconds = durationSeconds;
+        this.callStatus = callStatus;
+        this.businessOutcome = businessOutcome;
+        this.notes = notes;
+        this.createFollowUp = createFollowUp;
+        this.followUpTime = followUpTime;
+        this.followUpNotes = followUpNotes;
+    }
 }

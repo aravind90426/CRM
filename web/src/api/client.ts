@@ -1,4 +1,5 @@
 import axios, { AxiosError } from 'axios';
+import { auth } from '../config/firebase';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 
@@ -9,10 +10,22 @@ export const apiClient = axios.create({
   },
 });
 
-// Request interceptor: Inject JWT token
+// Request interceptor: Inject Firebase ID Token
 apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('crm_token');
+  async (config) => {
+    let token: string | null = null;
+    try {
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
+    } catch {
+      // fallback to stored token
+    }
+
+    if (!token) {
+      token = localStorage.getItem('crm_token');
+    }
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -28,6 +41,11 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('crm_token');
       localStorage.removeItem('crm_user');
+      try {
+        auth.signOut();
+      } catch {
+        // ignore
+      }
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }

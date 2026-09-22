@@ -99,7 +99,9 @@ export const CallsHistoryPage: React.FC = () => {
                           <ExternalLink size={12} />
                         </button>
                       ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>—</span>
+                        <span style={{ color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '0.8125rem' }}>
+                          {(c as any).phoneNumber || c.leadPhone || 'Unassociated Call'}
+                        </span>
                       )}
                     </td>
                     <td>

@@ -17,3 +17,9 @@ app:
     allowed-origins: "*"
   google-sheets:
     mock-delay-ms: 100
+    mock-mode: true
+
+firebase:
+  project-id: crmcalling-60005
+  web-api-key: AIzaSyBtqnhkIqRSdZ_pLA7sdWB9bKy5WQBVvGg
+  credentials-file: ""

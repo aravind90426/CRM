@@ -51,6 +51,7 @@ public interface FollowUpRepository extends JpaRepository<FollowUp, Long> {
     List<FollowUp> findUpcomingFollowUps(@Param("userId") Long userId, @Param("endOfDay") LocalDateTime endOfDay);
 
     long countByUserIdAndStatusAndScheduledTimeLessThan(Long userId, String status, LocalDateTime now);
+    long countByUserIdAndStatusAndScheduledTimeGreaterThanEqual(Long userId, String status, LocalDateTime now);
     long countByUserIdAndStatusAndScheduledTimeBetween(Long userId, String status, LocalDateTime start, LocalDateTime end);
     long countByStatus(String status);
     long countByStatusAndScheduledTimeLessThan(String status, LocalDateTime now);

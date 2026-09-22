@@ -75,7 +75,7 @@ async function runTests() {
     await page.type('#login-email', 'admin@crm.com');
     await page.type('#login-password', 'wrongpassword123');
     await page.click('#login-submit-btn');
-    await sleep(800);
+    await sleep(2200);
 
     const errorMsgPresent = await page.evaluate(() => {
       const text = document.body.innerText;
@@ -290,7 +290,7 @@ async function runTests() {
     await page.type('#new-user-email', testAgentEmail);
     await page.type('#new-user-password', 'agent123');
     await page.click('#submit-create-user-btn');
-    await sleep(1500);
+    await sleep(3500);
 
     const userCreated = await page.evaluate((email) => document.body.innerText.includes(email), testAgentEmail);
     assert(userCreated, `New employee "${testAgentEmail}" provisioned in users table`);

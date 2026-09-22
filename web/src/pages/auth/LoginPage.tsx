@@ -24,6 +24,23 @@ export const LoginPage: React.FC = () => {
     return <Navigate to={from} replace />;
   }
 
+  const formatAuthError = (err: any): string => {
+    const code = err?.code || '';
+    if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
+      return 'Invalid email or password. Please check your credentials.';
+    }
+    if (code === 'auth/too-many-requests') {
+      return 'Access temporarily disabled due to multiple failed login attempts. Please try again later.';
+    }
+    if (code === 'auth/user-disabled') {
+      return 'Your account has been disabled in Firebase Authentication.';
+    }
+    if (code === 'auth/network-request-failed') {
+      return 'Network error connecting to Firebase. Please check your internet connection.';
+    }
+    return getErrorMessage(err);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
@@ -39,7 +56,7 @@ export const LoginPage: React.FC = () => {
       const target = loggedUser.role === 'ROLE_ADMIN' ? '/admin/dashboard' : '/user/home';
       navigate(target, { replace: true });
     } catch (err) {
-      setError(getErrorMessage(err));
+      setError(formatAuthError(err));
     } finally {
       setIsSubmitting(false);
     }

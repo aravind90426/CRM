@@ -16,6 +16,7 @@ import com.crm.model.Sale;
 import com.crm.model.User;
 import com.crm.repository.*;
 import com.crm.service.AuditService;
+import com.crm.service.FirebaseAuthService;
 import com.crm.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -41,6 +42,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
     private final AuditService auditService;
+    private final FirebaseAuthService firebaseAuthService;
 
     @Override
     @Transactional
@@ -58,11 +60,23 @@ public class UserServiceImpl implements UserService {
         Role role = roleRepository.findByName(finalRoleName)
                 .orElseGet(() -> roleRepository.save(Role.builder().name(finalRoleName).build()));
 
+        // Provision user on Firebase Authentication (Requirement 7 & 8)
+        String rawPassword = (request.getPassword() != null && !request.getPassword().isBlank())
+                ? request.getPassword()
+                : "agent123";
+
+        String firebaseUid = firebaseAuthService.createFirebaseUser(
+                request.getEmail().toLowerCase().trim(),
+                rawPassword,
+                request.getName()
+        );
+
         User user = User.builder()
                 .name(request.getName())
                 .email(request.getEmail().toLowerCase().trim())
                 .phone(request.getPhone())
-                .password(passwordEncoder.encode(request.getPassword()))
+                .password(passwordEncoder.encode(rawPassword))
+                .firebaseUid(firebaseUid)
                 .role(role)
                 .status(request.getStatus() != null ? request.getStatus().toUpperCase() : "ACTIVE")
                 .build();
@@ -176,7 +190,12 @@ public class UserServiceImpl implements UserService {
         List<Sale> sales = salesRepository.findByUserIdOrderByConvertedAtDesc(id);
         salesRepository.deleteAll(sales);
 
-        // 8. Delete user
+        // 8. Delete user from Firebase Auth if linked
+        if (user.getFirebaseUid() != null) {
+            firebaseAuthService.deleteFirebaseUser(user.getFirebaseUid());
+        }
+
+        // 9. Delete user from MySQL
         userRepository.delete(user);
         auditService.logAction(currentUserId, "User", id, "DELETE", user.getEmail(), "DELETED");
     }
@@ -237,6 +256,14 @@ public class UserServiceImpl implements UserService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+
+        if (user.getFirebaseUid() != null && !user.getFirebaseUid().isBlank()) {
+            try {
+                firebaseAuthService.updateFirebaseUserPassword(user.getFirebaseUid(), request.getNewPassword());
+            } catch (Exception e) {
+                // Log and don't block Spring Boot auth
+            }
+        }
 
         auditService.logAction(userId, "User", userId, "PASSWORD_CHANGE", null, "Password updated successfully");
     }

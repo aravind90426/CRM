@@ -39,16 +39,25 @@ export const OutcomeBadge: React.FC<{ outcome?: string }> = ({ outcome }) => {
   if (!outcome) return <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>—</span>;
 
   switch (outcome.toUpperCase()) {
+    case 'PROSPECT':
     case 'INTERESTED':
-      return <Badge variant="primary">{outcome}</Badge>;
+      return <Badge variant="success">{outcome.toUpperCase() === 'PROSPECT' ? 'Prospect' : outcome}</Badge>;
+    case 'ACCEPTANCE':
+      return <Badge variant="primary">Acceptance</Badge>;
     case 'CONVERTED':
       return <Badge variant="success">{outcome}</Badge>;
     case 'FOLLOW_UP':
       return <Badge variant="warning">{outcome}</Badge>;
+    case 'NOT_ATTENDED':
+      return (
+        <Badge variant="danger" showDot={false}>
+          <span style={{ marginRight: '4px' }}>🔴</span> Not Attended
+        </Badge>
+      );
     case 'NOT_INTERESTED':
     case 'WRONG_NUMBER':
     case 'JUNK':
-      return <Badge variant="danger">{outcome}</Badge>;
+      return <Badge variant="danger">{outcome.toUpperCase() === 'JUNK' ? 'Junk' : outcome}</Badge>;
     default:
       return <Badge variant="secondary">{outcome}</Badge>;
   }
@@ -58,16 +67,25 @@ export const CallStatusBadge: React.FC<{ status?: string }> = ({ status }) => {
   if (!status) return null;
 
   switch (status.toUpperCase()) {
-    case 'CONNECTED':
-      return <Badge variant="success">{status}</Badge>;
+    case 'NOT_ATTENDED':
     case 'MISSED':
-      return <Badge variant="danger">{status}</Badge>;
     case 'NO_ANSWER':
-      return <Badge variant="warning">{status}</Badge>;
-    case 'BUSY':
-      return <Badge variant="info">{status}</Badge>;
     case 'FAILED':
-      return <Badge variant="danger">{status}</Badge>;
+    case 'REJECTED':
+      return (
+        <Badge variant="danger" showDot={false}>
+          <span style={{ marginRight: '4px' }}>🔴</span> Not Attended
+        </Badge>
+      );
+    case 'JUNK':
+      return <Badge variant="warning">Junk</Badge>;
+    case 'ACCEPTANCE':
+    case 'ACCEPTABLE':
+      return <Badge variant="primary">Acceptance</Badge>;
+    case 'PROSPECT':
+      return <Badge variant="success">Prospect</Badge>;
+    case 'CONNECTED':
+      return <Badge variant="success">Connected</Badge>;
     default:
       return <Badge variant="secondary">{status}</Badge>;
   }

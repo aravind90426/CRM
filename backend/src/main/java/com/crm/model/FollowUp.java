@@ -37,6 +37,9 @@ public class FollowUp {
     @Builder.Default
     private String status = "PENDING"; // PENDING, COMPLETED, MISSED, CANCELLED
 
+    @Column(name = "call_id")
+    private Long callId;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 

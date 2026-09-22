@@ -27,8 +27,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (e) {
+      console.warn('Logout error:', e);
+    }
     navigate('/login', { replace: true, state: null });
   };
 
@@ -43,7 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { to: '/admin/users', label: 'User Management', icon: <Layers size={19} /> },
     { to: '/admin/reports', label: 'Reports Hub', icon: <BarChart3 size={19} /> },
     { to: '/admin/audit-logs', label: 'Audit Trail', icon: <FileText size={19} /> },
-    { to: '/admin/google-sheets', label: 'Google Sheets Sync', icon: <Sheet size={19} /> },
+    { to: '/admin/google-sheets', label: 'Sync History', icon: <Sheet size={19} /> },
     { to: '/settings', label: 'Settings', icon: <Settings size={19} /> },
   ];
 

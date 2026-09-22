@@ -17,6 +17,8 @@ public interface LeadRepository extends JpaRepository<Lead, Long> {
 
     Optional<Lead> findByProjectIdAndPhone(Long projectId, String phone);
 
+    Optional<Lead> findFirstByPhoneOrderByCreatedAtDesc(String phone);
+
     List<Lead> findByProjectId(Long projectId);
 
     @Query("SELECT l FROM Lead l WHERE " +
@@ -64,4 +66,8 @@ public interface LeadRepository extends JpaRepository<Lead, Long> {
     @Query("SELECT COUNT(l) FROM Lead l WHERE l.businessOutcome = :outcome AND l.id IN " +
            "(SELECT a.lead.id FROM LeadAssignment a WHERE a.user.id = :userId AND a.isActive = true)")
     long countOutcomeForUser(@Param("userId") Long userId, @Param("outcome") String outcome);
+
+    @Query("SELECT l FROM Lead l WHERE l.id IN " +
+           "(SELECT a.lead.id FROM LeadAssignment a WHERE a.user.id = :userId AND a.isActive = true)")
+    List<Lead> findAllAssignedToUser(@Param("userId") Long userId);
 }

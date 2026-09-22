@@ -10,7 +10,6 @@ import {
   ArrowUpRight,
   ShieldCheck,
   PlusCircle,
-  Sheet,
   PhoneForwarded,
   AlertTriangle,
 } from 'lucide-react';
@@ -93,14 +92,6 @@ export const AdminDashboardPage: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button
-            id="admin-sync-sheets-btn"
-            onClick={() => navigate('/admin/google-sheets')}
-            className="btn btn-secondary btn-sm"
-          >
-            <Sheet size={16} style={{ color: '#10b981' }} />
-            <span>Google Sheets Sync</span>
-          </button>
           <button
             id="admin-new-lead-btn"
             onClick={() => navigate('/leads')}

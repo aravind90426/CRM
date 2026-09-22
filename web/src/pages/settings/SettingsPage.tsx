@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   Lock,
@@ -7,13 +7,20 @@ import {
   CheckCircle2,
   AlertCircle,
   KeyRound,
+  LogOut,
+  FileSpreadsheet,
+  Clock,
+  ArrowRight,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { authApi } from '../../api';
+import { authApi, sheetsApi } from '../../api';
 import { getErrorMessage } from '../../api/client';
+import { GoogleSheetsSyncLog, GoogleSheetsSyncSummary } from '../../types';
 
 export const SettingsPage: React.FC = () => {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -21,6 +28,24 @@ export const SettingsPage: React.FC = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Google Sheets Sync status (Admin only)
+  const [syncStatus, setSyncStatus] = useState<GoogleSheetsSyncLog | null>(null);
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadSyncStatus();
+    }
+  }, [isAdmin]);
+
+  const loadSyncStatus = async () => {
+    try {
+      const res = await sheetsApi.getSyncStatus();
+      setSyncStatus(res);
+    } catch (e) {
+      // Non-blocking
+    }
+  };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +62,7 @@ export const SettingsPage: React.FC = () => {
     setFeedback(null);
     try {
       await authApi.changePassword({ currentPassword, newPassword });
-      setFeedback({ type: 'success', message: 'Password updated successfully with BCrypt hashing!' });
+      setFeedback({ type: 'success', message: 'Password updated successfully!' });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -48,6 +73,43 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleLogout = async () => {
+    if (window.confirm('Are you sure you want to sign out of your account?')) {
+      try {
+        await logout();
+      } catch (e) {
+        console.warn('Logout error:', e);
+      }
+      navigate('/login', { replace: true });
+    }
+  };
+
+  const formatDateTime = (dateStr?: string) => {
+    if (!dateStr) return 'Never';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  const summary: GoogleSheetsSyncSummary = syncStatus?.summary || {
+    users: syncStatus?.usersCount || 0,
+    projects: syncStatus?.projectsCount || 0,
+    leads: syncStatus?.leadsCount || 0,
+    assignments: syncStatus?.assignmentsCount || 0,
+    calls: syncStatus?.callsCount || 0,
+    followUps: syncStatus?.followupsCount || 0,
+    sales: syncStatus?.salesCount || 0,
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '800px' }}>
       <div>
@@ -55,7 +117,7 @@ export const SettingsPage: React.FC = () => {
           Account Settings
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginTop: '2px' }}>
-          Manage your personal security credentials and profile configurations.
+          Manage your personal security credentials, profile, and system configurations.
         </p>
       </div>
 
@@ -84,46 +146,139 @@ export const SettingsPage: React.FC = () => {
           <div className="card-title">Profile Information</div>
           <User size={18} style={{ color: 'var(--primary)' }} />
         </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '0.875rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
           <div>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>Full Name</span>
-            <div style={{ fontWeight: 700, fontSize: '1.125rem' }}>{user?.name}</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Full Name</div>
+            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>{user?.name}</div>
           </div>
           <div>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>Email Address</span>
-            <div style={{ fontWeight: 600 }}>{user?.email}</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Email Address</div>
+            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>{user?.email}</div>
           </div>
           <div>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>Assigned Role</span>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>System Role</div>
             <div style={{ marginTop: '4px' }}>
-              <span className={`badge ${isAdmin ? 'badge-primary' : 'badge-info'}`}>
-                <Shield size={12} />
-                <span>{isAdmin ? 'System Administrator' : 'Sales Representative'}</span>
-              </span>
-            </div>
-          </div>
-          <div>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase' }}>Account Status</span>
-            <div style={{ marginTop: '4px' }}>
-              <span className="badge badge-success">
-                <span className="badge-dot" />
-                ACTIVE
+              <span className={`badge ${isAdmin ? 'badge-primary' : 'badge-neutral'}`}>
+                {isAdmin ? 'ADMINISTRATOR' : 'CALLING AGENT'}
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Change Password Card */}
+      {/* ADMIN-ONLY GOOGLE SHEETS SYNC SECTION */}
+      {isAdmin && (
+        <div
+          className="card"
+          style={{
+            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.07) 0%, rgba(15, 23, 42, 0.9) 100%)',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
+            padding: '24px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '10px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: '#10b981',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <FileSpreadsheet size={22} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800 }}>Google Sync History</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
+                  View synchronization records and history of CRM data into external Google Sheets.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => navigate('/admin/google-sheets')}
+              className="btn btn-outline btn-sm"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <span>View Sync History</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '12px',
+              padding: '14px',
+              background: 'rgba(15, 23, 42, 0.6)',
+              borderRadius: '10px',
+              border: '1px solid var(--border-subtle)',
+              marginBottom: '18px',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Last Sync</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
+                {formatDateTime(syncStatus?.completedAt || syncStatus?.startedAt)}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Status</div>
+              <div style={{ marginTop: '4px' }}>
+                <span className={`badge ${syncStatus?.status === 'SUCCESS' ? 'badge-success' : 'badge-neutral'}`}>
+                  {syncStatus?.status === 'SUCCESS' ? 'Successful' : syncStatus?.status || 'IDLE'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: '8px' }}>
+              Records Synced
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              <span className="badge badge-neutral" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>
+                Users: <strong style={{ color: 'var(--text-primary)', marginLeft: '4px' }}>{summary.users}</strong>
+              </span>
+              <span className="badge badge-neutral" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>
+                Projects: <strong style={{ color: 'var(--text-primary)', marginLeft: '4px' }}>{summary.projects}</strong>
+              </span>
+              <span className="badge badge-neutral" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>
+                Leads: <strong style={{ color: 'var(--text-primary)', marginLeft: '4px' }}>{summary.leads}</strong>
+              </span>
+              <span className="badge badge-neutral" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>
+                Assignments: <strong style={{ color: 'var(--text-primary)', marginLeft: '4px' }}>{summary.assignments}</strong>
+              </span>
+              <span className="badge badge-neutral" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>
+                Calls: <strong style={{ color: 'var(--text-primary)', marginLeft: '4px' }}>{summary.calls}</strong>
+              </span>
+              <span className="badge badge-neutral" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>
+                Follow Ups: <strong style={{ color: 'var(--text-primary)', marginLeft: '4px' }}>{summary.followUps}</strong>
+              </span>
+              <span className="badge badge-neutral" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>
+                Sales: <strong style={{ color: 'var(--text-primary)', marginLeft: '4px' }}>{summary.sales}</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Password Reset Form Card */}
       <div className="card">
         <div className="card-header">
-          <div className="card-title">Update Password</div>
-          <KeyRound size={18} style={{ color: 'var(--warning)' }} />
+          <div className="card-title">Change Password</div>
+          <KeyRound size={18} style={{ color: 'var(--primary)' }} />
         </div>
 
         <form onSubmit={handleChangePassword}>
-          <div className="form-group">
+          <div className="form-group" style={{ marginBottom: '14px' }}>
             <label className="form-label">Current Password</label>
             <input
               type="password"
@@ -169,6 +324,26 @@ export const SettingsPage: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {/* Session Management & Logout Card */}
+      <div className="card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>Active Session</div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginTop: '3px' }}>
+            Signed in as <strong style={{ color: 'var(--text-primary)' }}>{user?.email}</strong>. Ready to switch accounts or end session?
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="btn btn-danger btn-md"
+          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+        >
+          <LogOut size={16} />
+          <span>Sign Out</span>
+        </button>
+      </div>
+
     </div>
   );
 };

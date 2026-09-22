@@ -29,6 +29,7 @@ public class DataInitializer implements CommandLineRunner {
     private final NoteRepository noteRepository;
     private final SalesRepository salesRepository;
     private final PasswordEncoder passwordEncoder;
+    private final com.crm.service.FirebaseAuthService firebaseAuthService;
 
     @Override
     @Transactional
@@ -78,6 +79,27 @@ public class DataInitializer implements CommandLineRunner {
                     .status("ACTIVE")
                     .build());
         });
+
+        // Ensure default users are provisioned in Firebase Authentication
+        try {
+            String adminFbUid = firebaseAuthService.createFirebaseUser("admin@crm.com", "admin123", "System Administrator");
+            if (adminFbUid != null && admin.getFirebaseUid() == null) {
+                admin.setFirebaseUid(adminFbUid);
+                userRepository.save(admin);
+            }
+            String agentFbUid = firebaseAuthService.createFirebaseUser("agent@crm.com", "agent123", "Priya Sharma");
+            if (agentFbUid != null && agent.getFirebaseUid() == null) {
+                agent.setFirebaseUid(agentFbUid);
+                userRepository.save(agent);
+            }
+            String agent2FbUid = firebaseAuthService.createFirebaseUser("agent2@crm.com", "agent123", "Kiran Rao");
+            if (agent2FbUid != null && agent2.getFirebaseUid() == null) {
+                agent2.setFirebaseUid(agent2FbUid);
+                userRepository.save(agent2);
+            }
+        } catch (Exception e) {
+            logger.warn("Could not sync seed users to Firebase Authentication: {}", e.getMessage());
+        }
 
         // 3. Initialize Sample Projects & Leads if empty
         if (projectRepository.count() == 0) {

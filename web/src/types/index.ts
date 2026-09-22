@@ -93,6 +93,9 @@ export interface Call {
   id: number;
   leadId?: number;
   leadName?: string;
+  leadPhone?: string;
+  phoneNumber?: string;
+  isConnected?: boolean;
   user: {
     id: number;
     name: string;
@@ -101,8 +104,8 @@ export interface Call {
   endTime?: string;
   durationSeconds: number;
   formattedDuration: string;
-  callStatus: 'CONNECTED' | 'MISSED' | 'NO_ANSWER' | 'BUSY' | 'FAILED';
-  businessOutcome?: 'INTERESTED' | 'NOT_INTERESTED' | 'FOLLOW_UP' | 'WRONG_NUMBER' | 'JUNK' | 'CONVERTED';
+  callStatus: string;
+  businessOutcome?: string;
   notes?: string;
   createdAt: string;
 }
@@ -202,17 +205,37 @@ export interface DashboardSummary {
   totalSalesValue: number;
 }
 
+export interface GoogleSheetsSyncSummary {
+  users: number;
+  projects: number;
+  leads: number;
+  assignments: number;
+  calls: number;
+  followUps: number;
+  sales: number;
+}
+
 export interface GoogleSheetsSyncLog {
   id: number;
+  syncId?: string;
+  syncCode?: string;
   triggeredBy: {
     id: number;
     name: string;
   };
-  status: 'IN_PROGRESS' | 'SUCCESS' | 'FAILED';
+  status: 'IN_PROGRESS' | 'SUCCESS' | 'FAILED' | 'STARTED' | 'PARTIAL';
   recordsSynced: number;
+  usersCount?: number;
+  projectsCount?: number;
+  leadsCount?: number;
+  assignmentsCount?: number;
+  callsCount?: number;
+  followupsCount?: number;
+  salesCount?: number;
   errorMessage?: string;
   startedAt: string;
   completedAt?: string;
+  summary?: GoogleSheetsSyncSummary;
 }
 
 export interface AuditLog {

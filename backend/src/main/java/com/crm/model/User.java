@@ -29,6 +29,7 @@ public class User {
     @Column(length = 20)
     private String phone;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     @Column(nullable = false)
     private String password;
 
@@ -39,6 +40,10 @@ public class User {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private String status = "ACTIVE"; // ACTIVE, INACTIVE
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Column(name = "firebase_uid", length = 128)
+    private String firebaseUid;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

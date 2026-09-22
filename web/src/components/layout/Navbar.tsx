@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, Bell, Shield, PhoneCall, PlusCircle, Search } from 'lucide-react';
+import { Menu, Bell, Shield, PhoneCall, PlusCircle, Search, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -9,8 +9,19 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, title }) => {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    if (window.confirm('Are you sure you want to sign out?')) {
+      try {
+        await logout();
+      } catch (e) {
+        console.warn('Logout error:', e);
+      }
+      navigate('/login', { replace: true });
+    }
+  };
 
   return (
     <header
@@ -78,6 +89,23 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, title }) => {
           <Shield size={14} />
           <span>{isAdmin ? 'ADMIN' : 'AGENT'}</span>
         </div>
+
+        {/* Quick Sign Out Button */}
+        <button
+          onClick={handleLogout}
+          className="btn btn-ghost btn-sm"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            color: 'var(--text-secondary)',
+            padding: '6px 10px',
+          }}
+          title="Sign Out"
+        >
+          <LogOut size={16} style={{ color: 'var(--danger)' }} />
+          <span className="hidden-sm">Sign Out</span>
+        </button>
       </div>
 
       <style>{`

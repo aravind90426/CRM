@@ -140,6 +140,27 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
 
+    @ExceptionHandler(GoogleSheetsValidationException.class)
+    public ResponseEntity<ErrorResponse> handleGoogleSheetsValidationException(
+            GoogleSheetsValidationException ex, HttpServletRequest request) {
+        Map<String, String> details = new HashMap<>();
+        if (ex.getSheetName() != null) details.put("sheet", ex.getSheetName());
+        if (ex.getRowNumber() != null) details.put("row", String.valueOf(ex.getRowNumber()));
+        if (ex.getColumnName() != null) details.put("column", ex.getColumnName());
+        if (ex.getReason() != null) details.put("reason", ex.getReason());
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("PUSH FAILED")
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .details(details)
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(
             Exception ex, HttpServletRequest request) {

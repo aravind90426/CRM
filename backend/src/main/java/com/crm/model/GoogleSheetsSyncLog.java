@@ -30,9 +30,40 @@ public class GoogleSheetsSyncLog {
     @Builder.Default
     private String status = "IN_PROGRESS"; // IN_PROGRESS, SUCCESS, FAILED
 
+    @Column(name = "sync_id", length = 50)
+    private String syncId;
+
     @Column(name = "records_synced")
     @Builder.Default
     private Integer recordsSynced = 0;
+
+    @Column(name = "users_count")
+    @Builder.Default
+    private Integer usersCount = 0;
+
+    @Column(name = "projects_count")
+    @Builder.Default
+    private Integer projectsCount = 0;
+
+    @Column(name = "leads_count")
+    @Builder.Default
+    private Integer leadsCount = 0;
+
+    @Column(name = "assignments_count")
+    @Builder.Default
+    private Integer assignmentsCount = 0;
+
+    @Column(name = "calls_count")
+    @Builder.Default
+    private Integer callsCount = 0;
+
+    @Column(name = "followups_count")
+    @Builder.Default
+    private Integer followupsCount = 0;
+
+    @Column(name = "sales_count")
+    @Builder.Default
+    private Integer salesCount = 0;
 
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;

@@ -25,6 +25,9 @@ export const normalizeCall = (raw: any): Call => {
     businessOutcome: raw.businessOutcome,
     leadId: raw.leadId,
     leadName: raw.leadName,
+    leadPhone: raw.leadPhone || raw.phoneNumber,
+    phoneNumber: raw.phoneNumber || raw.leadPhone,
+    isConnected: raw.isConnected,
     notes: raw.notes,
     createdAt: raw.createdAt || raw.startedAt || new Date().toISOString(),
   };
@@ -87,16 +90,35 @@ export const normalizeAuditLog = (raw: any): AuditLog => {
 
 export const normalizeSheetsLog = (raw: any): GoogleSheetsSyncLog => {
   if (!raw) return raw;
+  const summary = raw.summary || {
+    users: raw.usersCount ?? 0,
+    projects: raw.projectsCount ?? 0,
+    leads: raw.leadsCount ?? 0,
+    assignments: raw.assignmentsCount ?? 0,
+    calls: raw.callsCount ?? 0,
+    followUps: raw.followupsCount ?? 0,
+    sales: raw.salesCount ?? 0,
+  };
   return {
     ...raw,
-    id: raw.syncId || raw.id || 0,
-    triggeredBy: raw.triggeredBy || {
+    id: raw.id || (typeof raw.syncId === 'number' ? raw.syncId : 0),
+    syncId: raw.syncId ? String(raw.syncId) : undefined,
+    syncCode: raw.syncCode || raw.syncId,
+    triggeredBy: typeof raw.triggeredBy === 'object' ? raw.triggeredBy : {
       id: 1,
-      name: 'System Administrator',
+      name: raw.triggeredBy || 'System Administrator',
     },
     status: raw.status || 'SUCCESS',
     recordsSynced: raw.recordsSynced ?? 0,
-    errorMessage: raw.errorMessage || raw.message,
+    usersCount: raw.usersCount ?? summary.users,
+    projectsCount: raw.projectsCount ?? summary.projects,
+    leadsCount: raw.leadsCount ?? summary.leads,
+    assignmentsCount: raw.assignmentsCount ?? summary.assignments,
+    callsCount: raw.callsCount ?? summary.calls,
+    followupsCount: raw.followupsCount ?? summary.followUps,
+    salesCount: raw.salesCount ?? summary.sales,
+    summary,
+    errorMessage: raw.errorMessage || (raw.status === 'FAILED' ? raw.message : undefined),
     startedAt: raw.startedAt || new Date().toISOString(),
     completedAt: raw.completedAt,
   };

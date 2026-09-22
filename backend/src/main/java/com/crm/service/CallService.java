@@ -18,4 +18,5 @@ public interface CallService {
     List<Call> getCallsByLead(Long leadId, Long userId, boolean isAdmin);
     Page<CallResponse> searchCalls(Long userId, Long leadId, Long projectId, String status, String outcome,
                                    LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
+    com.crm.dto.response.CallAnalyticsResponse getCallAnalytics(Long userId, LocalDateTime startDate, LocalDateTime endDate);
 }

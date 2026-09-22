@@ -38,12 +38,7 @@ export const DiallerPage: React.FC = () => {
   const timerRef = useRef<number | null>(null);
 
   // Form State
-  const [callStatus, setCallStatus] = useState<'CONNECTED' | 'MISSED' | 'NO_ANSWER' | 'BUSY' | 'FAILED'>('CONNECTED');
-  const [businessOutcome, setBusinessOutcome] = useState<'INTERESTED' | 'NOT_INTERESTED' | 'FOLLOW_UP' | 'WRONG_NUMBER' | 'JUNK' | 'CONVERTED'>('INTERESTED');
   const [notes, setNotes] = useState('');
-  const [createFollowUp, setCreateFollowUp] = useState(false);
-  const [followUpDate, setFollowUpDate] = useState('');
-  const [followUpNotes, setFollowUpNotes] = useState('');
 
   const [isLoadingLeads, setIsLoadingLeads] = useState(true);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
@@ -112,67 +107,56 @@ export const DiallerPage: React.FC = () => {
     setFeedback(null);
   };
 
-  const handleEndCall = () => {
+  const handleEndCall = async () => {
     setIsCalling(false);
+    const duration = callDuration;
+    const start = callStartTime || new Date();
+    const end = new Date();
+    const leadId = selectedLeadId;
+
+    if (!leadId && !selectedLead) {
+      setCallDuration(0);
+      setCallStartTime(null);
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await callsApi.logCall({
+        leadId: leadId || undefined,
+        phoneNumber: selectedLead?.phone,
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        durationSeconds: duration,
+        isConnected: duration > 0,
+        notes: notes.trim() || undefined,
+      });
+
+      setFeedback({
+        type: 'success',
+        message: `Call ended and automatically logged! Status calculated from duration (${formatTimer(duration)}).`,
+      });
+
+      // Reset timer and notes
+      setCallDuration(0);
+      setCallStartTime(null);
+      setNotes('');
+
+      // Refresh lead details
+      if (leadId) {
+        loadLeadDetail(leadId);
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: getErrorMessage(err) });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const formatTimer = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleSaveInteraction = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedLeadId) {
-      setFeedback({ type: 'error', message: 'Please select a lead first.' });
-      return;
-    }
-
-    setIsSaving(true);
-    setFeedback(null);
-
-    try {
-      // 1. Log the call
-      await callsApi.logCall({
-        leadId: selectedLeadId,
-        startTime: (callStartTime || new Date()).toISOString(),
-        endTime: new Date().toISOString(),
-        durationSeconds: callDuration,
-        callStatus,
-        businessOutcome,
-        notes,
-      });
-
-      // 2. Optionally create follow-up
-      if (createFollowUp && followUpDate) {
-        await followUpsApi.createFollowUp({
-          leadId: selectedLeadId,
-          followUpDate: followUpDate,
-          notes: followUpNotes || `Follow-up after call: ${notes}`,
-        });
-      }
-
-      setFeedback({
-        type: 'success',
-        message: `Call interaction saved successfully! Duration: ${formatTimer(callDuration)} • Outcome: ${businessOutcome}`,
-      });
-
-      // Reset form
-      setCallDuration(0);
-      setCallStartTime(null);
-      setNotes('');
-      setCreateFollowUp(false);
-      setFollowUpDate('');
-      setFollowUpNotes('');
-
-      // Refresh lead details
-      loadLeadDetail(selectedLeadId);
-    } catch (err) {
-      setFeedback({ type: 'error', message: getErrorMessage(err) });
-    } finally {
-      setIsSaving(false);
-    }
   };
 
   return (
@@ -372,115 +356,39 @@ export const DiallerPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Call Logging Form (Section #13 & #14) */}
-          <form onSubmit={handleSaveInteraction}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-              <div className="form-group">
-                <label className="form-label" htmlFor="dialler-call-status">
-                  Call Status (Telephony State) *
-                </label>
-                <select
-                  id="dialler-call-status"
-                  className="form-select"
-                  value={callStatus}
-                  onChange={(e: any) => setCallStatus(e.target.value)}
-                  required
-                >
-                  <option value="CONNECTED">CONNECTED (Answered)</option>
-                  <option value="MISSED">MISSED</option>
-                  <option value="NO_ANSWER">NO_ANSWER (Ringing)</option>
-                  <option value="BUSY">BUSY (Line Busy)</option>
-                  <option value="FAILED">FAILED (Network Error)</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" htmlFor="dialler-business-outcome">
-                  Business Outcome *
-                </label>
-                <select
-                  id="dialler-business-outcome"
-                  className="form-select"
-                  value={businessOutcome}
-                  onChange={(e: any) => setBusinessOutcome(e.target.value)}
-                  required
-                >
-                  <option value="INTERESTED">INTERESTED (High Intent)</option>
-                  <option value="NOT_INTERESTED">NOT_INTERESTED</option>
-                  <option value="FOLLOW_UP">FOLLOW_UP (Callback Requested)</option>
-                  <option value="WRONG_NUMBER">WRONG_NUMBER</option>
-                  <option value="JUNK">JUNK / SPAM</option>
-                  <option value="CONVERTED">CONVERTED (Booking Agreed)</option>
-                </select>
-              </div>
-            </div>
-
+          {/* Call Discussion Notes */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div className="form-group">
-              <label className="form-label">Customer Discussion Notes</label>
+              <label className="form-label">Discussion Notes (Optional)</label>
               <textarea
                 id="dialler-call-notes"
                 className="form-textarea"
-                placeholder="Details of the discussion, client budget, feedback, questions raised..."
+                placeholder="Type client notes, questions or feedback while on call..."
                 rows={3}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
             </div>
 
-            {/* Quick Follow-up Option */}
             <div
               style={{
                 padding: '12px 16px',
-                background: 'rgba(255, 255, 255, 0.02)',
+                background: 'rgba(59, 130, 246, 0.05)',
                 borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--border-subtle)',
-                marginBottom: '16px',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '0.8125rem',
+                color: 'var(--text-secondary)',
               }}
             >
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}>
-                <input
-                  type="checkbox"
-                  checked={createFollowUp}
-                  onChange={(e) => setCreateFollowUp(e.target.checked)}
-                />
-                <span>Schedule Next Follow-up for this Customer</span>
-              </label>
-
-              {createFollowUp && (
-                <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label">Follow-up Date & Time</label>
-                    <input
-                      type="datetime-local"
-                      className="form-input"
-                      value={followUpDate}
-                      onChange={(e) => setFollowUpDate(e.target.value)}
-                      required={createFollowUp}
-                    />
-                  </div>
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="Follow-up reminder notes..."
-                      value={followUpNotes}
-                      onChange={(e) => setFollowUpNotes(e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
+              <span style={{ fontSize: '1.25rem' }}>⚡</span>
+              <div>
+                <strong style={{ color: 'var(--text-primary)' }}>Automatic Call Status Active:</strong> When the call ends, the status (Not Attended, Junk, Acceptance, Prospect) is calculated and saved automatically without manual selection.
+              </div>
             </div>
-
-            <button
-              id="save-call-log-btn"
-              type="submit"
-              className="btn btn-primary btn-lg"
-              style={{ width: '100%' }}
-              disabled={isSaving || isCalling}
-            >
-              {isSaving ? 'Persisting Interaction...' : 'Save Interaction Log'}
-            </button>
-          </form>
+          </div>
         </div>
       </div>
     </div>

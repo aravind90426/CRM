@@ -184,11 +184,13 @@ export const callsApi = {
     return (data || []).map(normalizeCall);
   },
   logCall: async (data: {
-    leadId: number;
+    leadId?: number;
+    phoneNumber?: string;
     startTime?: string;
     endTime?: string;
     durationSeconds: number;
-    callStatus: string;
+    callStatus?: string;
+    isConnected?: boolean;
     businessOutcome?: string;
     notes?: string;
   }): Promise<Call> => {
@@ -313,7 +315,7 @@ export const reportsApi = {
 
 export const sheetsApi = {
   triggerSync: async (): Promise<GoogleSheetsSyncLog> => {
-    const res = await apiClient.post<ApiResponse<any>>('/google-sheets/sync');
+    const res = await apiClient.post<ApiResponse<any>>('/google-sheets/sync', {}, { timeout: 120000 });
     return normalizeSheetsLog(res.data.data);
   },
   getSyncStatus: async (): Promise<GoogleSheetsSyncLog> => {

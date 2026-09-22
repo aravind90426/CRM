@@ -60,6 +60,54 @@ public class Lead {
     @Column(name = "additional_info", columnDefinition = "TEXT")
     private String additionalInfo;
 
+    // Automatic Call Tracking & Metrics
+    @Column(name = "last_contacted_at")
+    private LocalDateTime lastContactedAt;
+
+    @Column(name = "last_call_id")
+    private Long lastCallId;
+
+    @Column(name = "last_call_status", length = 30)
+    private String lastCallStatus;
+
+    @Column(name = "last_call_duration")
+    private Integer lastCallDuration;
+
+    @Column(name = "total_call_count", nullable = false)
+    @Builder.Default
+    private Integer totalCallCount = 0;
+
+    @Column(name = "connected_call_count", nullable = false)
+    @Builder.Default
+    private Integer connectedCallCount = 0;
+
+    @Column(name = "missed_call_count", nullable = false)
+    @Builder.Default
+    private Integer missedCallCount = 0;
+
+    @Column(name = "rejected_call_count", nullable = false)
+    @Builder.Default
+    private Integer rejectedCallCount = 0;
+
+    @Column(name = "failed_call_count", nullable = false)
+    @Builder.Default
+    private Integer failedCallCount = 0;
+
+    @Column(name = "short_call_count", nullable = false)
+    @Builder.Default
+    private Integer shortCallCount = 0;
+
+    @Column(name = "junk_call_count", nullable = false)
+    @Builder.Default
+    private Integer junkCallCount = 0;
+
+    @Column(name = "follow_up_required", nullable = false)
+    @Builder.Default
+    private Boolean followUpRequired = false;
+
+    @Column(name = "next_follow_up_at")
+    private LocalDateTime nextFollowUpAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

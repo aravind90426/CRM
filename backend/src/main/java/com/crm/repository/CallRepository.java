@@ -15,10 +15,16 @@ import java.util.List;
 public interface CallRepository extends JpaRepository<Call, Long> {
     List<Call> findByLeadIdOrderByCreatedAtDesc(Long leadId);
 
-    @Query("SELECT c FROM Call c WHERE " +
+    java.util.Optional<Call> findByTelephonyCallId(String telephonyCallId);
+
+    boolean existsByTelephonyCallId(String telephonyCallId);
+
+    List<Call> findByLeadIdOrderByStartedAtAsc(Long leadId);
+
+    @Query("SELECT c FROM Call c LEFT JOIN c.lead l WHERE " +
            "(:userId IS NULL OR c.user.id = :userId) AND " +
-           "(:leadId IS NULL OR c.lead.id = :leadId) AND " +
-           "(:projectId IS NULL OR c.lead.project.id = :projectId) AND " +
+           "(:leadId IS NULL OR l.id = :leadId) AND " +
+           "(:projectId IS NULL OR l.project.id = :projectId) AND " +
            "(:status IS NULL OR c.callStatus = :status) AND " +
            "(:outcome IS NULL OR c.businessOutcome = :outcome) AND " +
            "(:startDate IS NULL OR c.createdAt >= :startDate) AND " +
@@ -48,5 +54,6 @@ public interface CallRepository extends JpaRepository<Call, Long> {
     long countByCallStatus(String callStatus);
 
     List<Call> findByUserId(Long userId);
+    List<Call> findByUserIdAndCreatedAtBetween(Long userId, LocalDateTime start, LocalDateTime end);
     void deleteByUserId(Long userId);
 }

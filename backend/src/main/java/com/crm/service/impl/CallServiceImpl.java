@@ -35,59 +35,84 @@ public class CallServiceImpl implements CallService {
     private final UserRepository userRepository;
     private final LeadAssignmentService leadAssignmentService;
     private final FollowUpService followUpService;
+    private final com.crm.repository.FollowUpRepository followUpRepository;
     private final CallMapper callMapper;
     private final AuditService auditService;
 
     @Override
     @Transactional
     public CallResponse logCall(CallCreateRequest request, Long userId, boolean isAdmin) {
-        Lead lead = leadRepository.findById(request.getLeadId())
-                .orElseThrow(() -> new ResourceNotFoundException("Lead not found with id: " + request.getLeadId()));
-
-        if (!leadAssignmentService.isUserAllowedToAccessLead(request.getLeadId(), userId, isAdmin)) {
-            throw new ForbiddenException("Access denied: You are not authorized to log calls for this lead");
+        Lead lead = null;
+        String rawPhone = request.getPhoneNumber();
+        if (request.getLeadId() != null) {
+            Lead cand = leadRepository.findById(request.getLeadId()).orElse(null);
+            if (cand != null && (isAdmin || leadAssignmentService.isUserAllowedToAccessLead(cand.getId(), userId, isAdmin))) {
+                lead = cand;
+                rawPhone = lead.getPhone();
+            }
+        } else if (rawPhone != null && !rawPhone.isBlank()) {
+            lead = findAssignedLeadForUser(rawPhone, userId, isAdmin);
         }
+
+        String cleanPhone = rawPhone != null ? rawPhone.replaceAll("[^0-9+]", "") : (lead != null ? lead.getPhone() : null);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
 
-        LocalDateTime started = request.getStartedAt() != null ? request.getStartedAt() : LocalDateTime.now().minusSeconds(request.getDurationSeconds());
+        int duration = request.getDurationSeconds() != null ? Math.max(0, request.getDurationSeconds()) : 0;
+        LocalDateTime started = request.getStartedAt() != null ? request.getStartedAt() : LocalDateTime.now().minusSeconds(duration);
         LocalDateTime ended = request.getEndedAt() != null ? request.getEndedAt() : LocalDateTime.now();
+
+        boolean isConnected = false;
+        if (request.getIsConnected() != null) {
+            isConnected = request.getIsConnected() && duration > 0;
+        } else if (request.getCallStatus() != null) {
+            isConnected = com.crm.util.CallStatusCalculator.isConnectedResult(request.getCallStatus()) && duration > 0;
+        } else {
+            isConnected = duration > 0;
+        }
+
+        String status = com.crm.util.CallStatusCalculator.calculateStatus(isConnected, duration);
 
         Call call = Call.builder()
                 .lead(lead)
                 .user(user)
+                .phoneNumber(lead != null ? lead.getPhone() : cleanPhone)
+                .isConnected(isConnected)
+                .callDirection(request.getCallDirection() != null ? request.getCallDirection() : "OUTBOUND")
                 .startedAt(started)
                 .endedAt(ended)
-                .durationSeconds(request.getDurationSeconds())
-                .callStatus(request.getCallStatus() != null ? request.getCallStatus().toUpperCase() : "CONNECTED")
-                .businessOutcome(request.getBusinessOutcome())
+                .durationSeconds(duration)
+                .callStatus(status)
+                .automaticClassification(status)
+                .finalClassification(status)
+                .businessOutcome(status)
                 .notes(request.getNotes())
                 .build();
 
         Call saved = callRepository.save(call);
 
-        // Update lead outcome and status if provided
-        if (request.getBusinessOutcome() != null && !request.getBusinessOutcome().isBlank()) {
-            lead.setBusinessOutcome(request.getBusinessOutcome());
-            if ("CONVERTED".equalsIgnoreCase(request.getBusinessOutcome())) {
-                lead.setStatus("CONVERTED");
-            } else if ("FOLLOW_UP".equalsIgnoreCase(request.getBusinessOutcome())) {
-                lead.setStatus("FOLLOW_UP");
-            } else if ("NEW".equalsIgnoreCase(lead.getStatus())) {
+        // Update lead outcome and status if associated with lead
+        if (lead != null) {
+            lead.setBusinessOutcome(status);
+            lead.setLastCallStatus(status);
+            lead.setLastCallDuration(duration);
+            lead.setLastContactedAt(ended);
+
+            if (isConnected && "NEW".equalsIgnoreCase(lead.getStatus())) {
                 lead.setStatus("CONTACTED");
             }
             leadRepository.save(lead);
-        }
 
-        // Optional immediate follow-up creation
-        if (request.isCreateFollowUp() && request.getFollowUpTime() != null) {
-            FollowUpCreateRequest fuReq = new FollowUpCreateRequest(lead.getId(), request.getFollowUpTime(), request.getFollowUpNotes());
-            followUpService.createFollowUp(fuReq, userId);
+            // Optional immediate follow-up creation
+            if (request.isCreateFollowUp() && request.getFollowUpTime() != null) {
+                FollowUpCreateRequest fuReq = new FollowUpCreateRequest(lead.getId(), request.getFollowUpTime(), request.getFollowUpNotes());
+                followUpService.createFollowUp(fuReq, userId);
+            }
         }
 
         auditService.logAction(userId, "Call", saved.getId(), "LOG_CALL", null,
-                "Status: " + saved.getCallStatus() + ", Duration: " + saved.getDurationSeconds() + "s on Lead: " + lead.getName());
+                "Status: " + status + ", Duration: " + duration + "s, Lead: " + (lead != null ? lead.getName() : "None"));
 
         return callMapper.toResponse(saved);
     }
@@ -158,5 +183,112 @@ public class CallServiceImpl implements CallService {
                                           LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
         return callRepository.searchCalls(userId, leadId, projectId, status, outcome, startDate, endDate, pageable)
                 .map(callMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.crm.dto.response.CallAnalyticsResponse getCallAnalytics(Long userId, LocalDateTime startDate, LocalDateTime endDate) {
+        LocalDateTime start = startDate != null ? startDate : LocalDateTime.now().minusDays(7);
+        LocalDateTime end = endDate != null ? endDate : LocalDateTime.now();
+
+        List<Call> calls = callRepository.findByUserIdAndCreatedAtBetween(userId, start, end);
+
+        long totalCalls = calls.size();
+        long uniqueCalls = calls.stream()
+                .filter(c -> c.getDurationSeconds() != null && c.getDurationSeconds() > 1)
+                .map(c -> c.getLead() != null ? c.getLead().getId() : null)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .count();
+
+        // Duration classification (Section 2)
+        long notAttended = calls.stream()
+                .filter(c -> "NOT_ATTENDED".equalsIgnoreCase(c.getCallStatus()) || !Boolean.TRUE.equals(c.getIsConnected()) || (c.getDurationSeconds() != null && c.getDurationSeconds() == 0))
+                .count();
+        long junkCalls = calls.stream()
+                .filter(c -> "JUNK".equalsIgnoreCase(c.getCallStatus()) || (Boolean.TRUE.equals(c.getIsConnected()) && c.getDurationSeconds() != null && c.getDurationSeconds() > 0 && c.getDurationSeconds() <= 20))
+                .count();
+        long shortCalls = junkCalls;
+        long acceptableCalls = calls.stream()
+                .filter(c -> "ACCEPTANCE".equalsIgnoreCase(c.getCallStatus()) || (Boolean.TRUE.equals(c.getIsConnected()) && c.getDurationSeconds() != null && c.getDurationSeconds() > 20 && c.getDurationSeconds() <= 300))
+                .count();
+        long prospectCalls = calls.stream()
+                .filter(c -> "PROSPECT".equalsIgnoreCase(c.getCallStatus()) || (Boolean.TRUE.equals(c.getIsConnected()) && c.getDurationSeconds() != null && c.getDurationSeconds() > 300))
+                .count();
+        long freshCalls = calls.stream()
+                .filter(c -> c.getLead() != null && (c.getLead().getTotalCallCount() == null || c.getLead().getTotalCallCount() <= 1))
+                .map(c -> c.getLead().getId())
+                .distinct()
+                .count();
+
+        // System Breakdown (Section 9)
+        long inboundCalls = calls.stream()
+                .filter(c -> "INBOUND".equalsIgnoreCase(c.getCallDirection()))
+                .count();
+        long outboundCalls = calls.stream()
+                .filter(c -> c.getCallDirection() == null || "OUTBOUND".equalsIgnoreCase(c.getCallDirection()))
+                .count();
+        long missedCalls = calls.stream()
+                .filter(c -> "MISSED".equalsIgnoreCase(c.getCallStatus()) || "NO_ANSWER".equalsIgnoreCase(c.getCallStatus()))
+                .count();
+        long connectedCalls = calls.stream()
+                .filter(c -> "CONNECTED".equalsIgnoreCase(c.getCallStatus()) && c.getDurationSeconds() != null && c.getDurationSeconds() > 0)
+                .count();
+        long totalTalkTimeSeconds = calls.stream()
+                .mapToLong(c -> c.getDurationSeconds() != null ? c.getDurationSeconds() : 0)
+                .sum();
+        long averageDurationSeconds = connectedCalls > 0 ? (totalTalkTimeSeconds / connectedCalls) : 0;
+        long todayCalls = calls.stream()
+                .filter(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().isEqual(java.time.LocalDate.now()))
+                .count();
+
+        long upcomingFollowUps = followUpRepository.countByUserIdAndStatusAndScheduledTimeGreaterThanEqual(userId, "PENDING", LocalDateTime.now());
+        long missedFollowUps = followUpRepository.countByUserIdAndStatusAndScheduledTimeLessThan(userId, "PENDING", LocalDateTime.now());
+
+        return com.crm.dto.response.CallAnalyticsResponse.builder()
+                .startDate(start)
+                .endDate(end)
+                .totalCalls(totalCalls)
+                .uniqueCalls(uniqueCalls)
+                .notAttendedCalls(notAttended)
+                .freshCalls(freshCalls)
+                .prospectCalls(prospectCalls)
+                .junkCalls(junkCalls)
+                .acceptableCalls(acceptableCalls)
+                .inboundCalls(inboundCalls)
+                .outboundCalls(outboundCalls)
+                .missedCalls(missedCalls)
+                .shortCalls(shortCalls)
+                .totalTalkTimeSeconds(totalTalkTimeSeconds)
+                .averageDurationSeconds(averageDurationSeconds)
+                .connectedCalls(connectedCalls)
+                .todayCalls(todayCalls)
+                .upcomingFollowUps(upcomingFollowUps)
+                .missedFollowUps(missedFollowUps)
+                .build();
+    }
+
+    private Lead findAssignedLeadForUser(String rawPhone, Long userId, boolean isAdmin) {
+        if (rawPhone == null || rawPhone.isBlank()) return null;
+        String digitsOnly = rawPhone.replaceAll("[^0-9]", "");
+        if (digitsOnly.isBlank()) return null;
+        String last10 = digitsOnly.length() >= 10 ? digitsOnly.substring(digitsOnly.length() - 10) : digitsOnly;
+
+        List<Lead> candidateLeads;
+        if (isAdmin) {
+            candidateLeads = leadRepository.findAll();
+        } else {
+            candidateLeads = leadRepository.findAllAssignedToUser(userId);
+        }
+
+        for (Lead l : candidateLeads) {
+            if (l.getPhone() == null) continue;
+            String leadDigits = l.getPhone().replaceAll("[^0-9]", "");
+            String leadLast10 = leadDigits.length() >= 10 ? leadDigits.substring(leadDigits.length() - 10) : leadDigits;
+            if (leadDigits.equals(digitsOnly) || leadLast10.equals(last10)) {
+                return l;
+            }
+        }
+        return null;
     }
 }

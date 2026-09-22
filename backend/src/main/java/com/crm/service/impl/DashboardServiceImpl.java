@@ -134,6 +134,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .myOverdueFollowUps(myOverdueFollowUps)
                 .interestedLeads(interestedLeads)
                 .myConversions(myConversions)
+                .totalRevenue(salesRepository.sumDealValueByUserId(userId))
                 .upcomingFollowUps(upcomingFollowUps)
                 .recentCalls(recentCalls)
                 .build();

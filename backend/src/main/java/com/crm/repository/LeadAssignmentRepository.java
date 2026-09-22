@@ -11,7 +11,11 @@ import java.util.Optional;
 
 @Repository
 public interface LeadAssignmentRepository extends JpaRepository<LeadAssignment, Long> {
-    Optional<LeadAssignment> findByLeadIdAndIsActiveTrue(Long leadId);
+    Optional<LeadAssignment> findFirstByLeadIdAndIsActiveTrueOrderByAssignedAtDesc(Long leadId);
+
+    default Optional<LeadAssignment> findByLeadIdAndIsActiveTrue(Long leadId) {
+        return findFirstByLeadIdAndIsActiveTrueOrderByAssignedAtDesc(leadId);
+    }
 
     List<LeadAssignment> findByLeadIdOrderByAssignedAtDesc(Long leadId);
 

@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Animated,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,15 +70,15 @@ export const SplashScreen: React.FC = () => {
         ]}
       >
         <View style={styles.logoContainer}>
-          <View style={styles.logoOuterCircle}>
-            <View style={styles.logoInnerCircle}>
-              <Ionicons name="headset" size={44} color={colors.primary} />
-            </View>
-          </View>
+          <Image
+            source={require('../../../assets/qmex-logo.jpg')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
         </View>
 
-        <Text style={styles.title}>CALLING CRM</Text>
-        <Text style={styles.subtitle}>USER WORKSPACE</Text>
+        <Text style={styles.title}>QMEX CRM</Text>
+        <Text style={styles.subtitle}>ENTERPRISE WORKSPACE</Text>
 
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="small" color={colors.primary} />
@@ -106,29 +107,12 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     marginBottom: spacing.lg,
-  },
-  logoOuterCircle: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    backgroundColor: 'rgba(99, 102, 241, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
   },
-  logoInnerCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.surfaceElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 8,
+  logoImage: {
+    width: 250,
+    height: 140,
   },
   title: {
     fontSize: 26,

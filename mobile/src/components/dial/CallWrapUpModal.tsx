@@ -10,7 +10,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
@@ -53,6 +55,8 @@ export const CallWrapUpModal: React.FC<CallWrapUpModalProps> = ({
   onClose,
   onCompleted,
 }) => {
+  const { height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [technicalStatus, setTechnicalStatus] = useState<string>('CONNECTED');
   const [durationSeconds, setDurationSeconds] = useState<number>(initialDurationSeconds);
   const [businessClassification, setBusinessClassification] = useState<string>('');
@@ -120,6 +124,12 @@ export const CallWrapUpModal: React.FC<CallWrapUpModalProps> = ({
     }
   };
 
+  const modalHeight = Math.min(
+    Math.max(screenHeight * 0.85, 450),
+    620,
+    screenHeight - (insets.top + insets.bottom + 20)
+  );
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -127,7 +137,12 @@ export const CallWrapUpModal: React.FC<CallWrapUpModalProps> = ({
         style={styles.modalBackdrop}
       >
         <TouchableOpacity style={styles.backdropTouch} activeOpacity={1} onPress={onClose} />
-        <View style={styles.sheetContainer}>
+        <View
+          style={[
+            styles.sheetContainer,
+            { height: modalHeight },
+          ]}
+        >
           <View style={styles.handle} />
 
           {/* Header */}
@@ -149,7 +164,14 @@ export const CallWrapUpModal: React.FC<CallWrapUpModalProps> = ({
             </View>
           </View>
 
-          <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+          {/* Body: flex: 1, minHeight: 0 */}
+          <View style={{ flex: 1, minHeight: 0, width: '100%' }}>
+            <ScrollView
+              style={{ flex: 1, width: '100%' }}
+              contentContainerStyle={styles.scrollArea}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
             {/* Step 1: Technical Outcome */}
             <Text style={styles.sectionLabel}>Call Technical Result</Text>
             <View style={styles.chipRow}>
@@ -271,9 +293,10 @@ export const CallWrapUpModal: React.FC<CallWrapUpModalProps> = ({
               numberOfLines={3}
             />
           </ScrollView>
+          </View>
 
-          {/* Action Footer */}
-          <View style={styles.footerActions}>
+          {/* Action Footer — FIXED sticky footer below ScrollView */}
+          <View style={[styles.footerActions, { paddingBottom: Math.max(insets.bottom, 12) }]}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose} disabled={submitting}>
               <Text style={styles.cancelBtnText}>Discard</Text>
             </TouchableOpacity>
@@ -308,8 +331,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '85%',
-    paddingBottom: Platform.OS === 'ios' ? 30 : 16,
+    width: '100%',
+    flexDirection: 'column',
+    overflow: 'hidden',
     borderTopWidth: 1,
     borderColor: colors.border,
   },
@@ -370,8 +394,12 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   scrollArea: {
+    width: '100%',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  scrollContent: {
+    paddingBottom: spacing.sm,
   },
   sectionLabel: {
     fontSize: 12,
@@ -515,8 +543,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
+    paddingTop: spacing.sm,
     gap: spacing.sm,
+    flexShrink: 0,
+    minHeight: 70,
+    borderTopWidth: 1.5,
+    borderTopColor: colors.border,
+    backgroundColor: '#F8FAFC',
   },
   cancelBtn: {
     flex: 1,

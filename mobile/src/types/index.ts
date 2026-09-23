@@ -27,7 +27,10 @@ export interface Project {
   status: string; // 'ACTIVE' | 'INACTIVE'
   createdAt?: string;
   updatedAt?: string;
+  totalLeads?: number;
+  assignedLeads?: number;
   assignedLeadsCount?: number;
+  convertedLeads?: number;
 }
 
 export interface LeadOwner {
@@ -69,6 +72,8 @@ export interface Lead {
   projectId?: number;
   projectName?: string;
   currentOwner?: LeadOwner;
+  currentOwnerId?: number;
+  currentOwnerName?: string;
   assignedTo?: LeadOwner;
   status: string; // 'NEW' | 'CONTACTED' | 'IN_PROGRESS' | 'FOLLOW_UP' | 'CONVERTED' | 'CLOSED'
   businessOutcome?: string | null; // 'INTERESTED' | 'NOT_INTERESTED' | 'FOLLOW_UP' | 'WRONG_NUMBER' | 'JUNK' | 'CONVERTED'
@@ -249,8 +254,11 @@ export interface Attendance {
 export interface AttendanceMonthlyResponse {
   year: number;
   month: number;
+  totalDays?: number;
   presentDays: number;
+  fullDays?: number;
   halfDays: number;
+  offDays?: number;
   leaveDays: number;
   holidayDays: number;
   totalWorkingHours: number;
@@ -261,8 +269,13 @@ export interface Sale {
   id: number;
   leadId: number;
   leadName?: string;
+  leadPhone?: string;
+  projectId?: number;
+  projectName?: string;
   userId: number;
   userName?: string;
+  assignedAgentName?: string;
+  status?: string;
   dealValue: number;
   notes?: string;
   convertedAt: string;
@@ -389,6 +402,21 @@ export interface PageResponse<T> {
   last: boolean;
 }
 
+export interface AdminNotification {
+  id: string;
+  type: 'PERMISSION_REQUEST' | 'LEAD_ASSIGNMENT' | 'LEAD_REASSIGNMENT' | 'PROJECT_EVENT' | 'SYSTEM_EVENT' | 'PROMOTION_APPROVED' | 'PROMOTION_REJECTED' | string;
+  title: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+  referenceId?: number;
+  referenceType?: string;
+  status?: string;
+  leadId?: number;
+  leadName?: string;
+  projectName?: string;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   message?: string;
@@ -401,9 +429,19 @@ export type RootStackParamList = {
   Login: undefined;
   Main: undefined;
   LeadDetails: { leadId: number; leadName?: string };
-  AttendanceHistory: undefined;
-  CallLogs: { initialTab?: 'ALL' | 'OUTBOUND' | 'INBOUND' | 'MISSED' };
+  AttendanceHistory: { userId?: number; userName?: string } | undefined;
+  CallLogs: {
+    initialTab?: string;
+    status?: string;
+    callDirection?: string;
+    minDuration?: number;
+    maxDuration?: number;
+    startDate?: string;
+    endDate?: string;
+    filterTitle?: string;
+  } | undefined;
   Sales: undefined;
+  ConvertedLeads: undefined;
   AdminProjects: undefined;
   AdminUsers: undefined;
   Assignments: undefined;
@@ -412,6 +450,7 @@ export type RootStackParamList = {
   GoogleSheets: undefined;
   FollowUps: { period?: 'overdue' | 'today' | 'upcoming' | 'completed' };
   Settings: undefined;
+  Notifications: undefined;
 };
 
 export type MainTabParamList = {
@@ -419,7 +458,7 @@ export type MainTabParamList = {
   Home: undefined;
   AdminDashboard: undefined;
   Dial: { initialPhone?: string };
-  Leads: { projectId?: number; projectName?: string };
+  Leads: { projectId?: number; projectName?: string; mode?: string };
   FollowUps: undefined;
   Reports: undefined;
   AdminHub: undefined;

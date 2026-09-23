@@ -29,8 +29,34 @@ export const CallLogsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
-  const initialTab: CallLogTab = (route.params?.initialTab as CallLogTab) || 'HISTORY';
+  const initialTabParam = route.params?.initialTab;
+  const initialTab: CallLogTab =
+    initialTabParam === 'TODAY' || initialTabParam === 'UPCOMING' || initialTabParam === 'MISSED'
+      ? initialTabParam
+      : 'HISTORY';
+
   const [activeTab, setActiveTab] = useState<CallLogTab>(initialTab);
+  const [customFilter, setCustomFilter] = useState<{
+    status?: string;
+    callDirection?: string;
+    minDuration?: number;
+    maxDuration?: number;
+    startDate?: string;
+    endDate?: string;
+    filterTitle?: string;
+  } | null>(
+    route.params?.status || route.params?.filterTitle || route.params?.callDirection || route.params?.startDate
+      ? {
+          status: route.params?.status,
+          callDirection: route.params?.callDirection,
+          minDuration: route.params?.minDuration,
+          maxDuration: route.params?.maxDuration,
+          startDate: route.params?.startDate,
+          endDate: route.params?.endDate,
+          filterTitle: route.params?.filterTitle,
+        }
+      : null
+  );
 
   const [calls, setCalls] = useState<Call[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
@@ -46,17 +72,18 @@ export const CallLogsScreen: React.FC = () => {
         const res = await followUpApi.getUpcomingFollowUps();
         setFollowUps(res);
       } else {
-        let statusFilter: string | undefined = undefined;
-        let startDate: string | undefined = undefined;
-        let endDate: string | undefined = undefined;
+        let statusFilter = customFilter?.status;
+        let directionFilter = customFilter?.callDirection;
+        let startDate = customFilter?.startDate;
+        let endDate = customFilter?.endDate;
 
         if (activeTab === 'TODAY') {
-          const start = new Date();
-          start.setHours(0, 0, 0, 0);
-          const end = new Date();
-          end.setHours(23, 59, 59, 999);
-          startDate = start.toISOString().slice(0, 19);
-          endDate = end.toISOString().slice(0, 19);
+          const now = new Date();
+          const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+          const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+          const pad = (n: number) => n.toString().padStart(2, '0');
+          startDate = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}T00:00:00`;
+          endDate = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T23:59:59`;
         } else if (activeTab === 'MISSED') {
           statusFilter = 'MISSED';
         }
@@ -65,9 +92,23 @@ export const CallLogsScreen: React.FC = () => {
           status: statusFilter,
           startDate,
           endDate,
-          size: 50,
+          size: 100,
         });
-        setCalls(res.content || []);
+
+        let list = res.content || [];
+
+        // Apply client-side filters if direction or duration thresholds are specified
+        if (directionFilter) {
+          list = list.filter((c) => (c.callDirection || 'OUTBOUND').toUpperCase() === directionFilter!.toUpperCase());
+        }
+        if (customFilter?.minDuration !== undefined) {
+          list = list.filter((c) => (c.durationSeconds || 0) >= customFilter.minDuration!);
+        }
+        if (customFilter?.maxDuration !== undefined) {
+          list = list.filter((c) => (c.durationSeconds || 0) <= customFilter.maxDuration!);
+        }
+
+        setCalls(list);
       }
     } catch (err: any) {
       setError(err.message || 'Unable to fetch call logs.');
@@ -75,7 +116,7 @@ export const CallLogsScreen: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeTab]);
+  }, [activeTab, customFilter]);
 
   useEffect(() => {
     loadData();
@@ -94,6 +135,10 @@ export const CallLogsScreen: React.FC = () => {
 
   const handleOpenLead = (leadId: number, leadName?: string) => {
     navigation.navigate('LeadDetails', { leadId, leadName });
+  };
+
+  const handleClearFilter = () => {
+    setCustomFilter(null);
   };
 
   const formatDateTime = (iso?: string) => {
@@ -115,15 +160,33 @@ export const CallLogsScreen: React.FC = () => {
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.container}>
       <Header
         title="Call Logs"
-        subtitle="Call records, follow-ups & missed interactions"
+        subtitle={customFilter?.filterTitle ? `Filtered by ${customFilter.filterTitle}` : "Call records & customer interactions"}
         onBack={() => navigation.goBack()}
       />
+
+      {/* Custom Filter Active Banner */}
+      {customFilter && (
+        <View style={styles.filterBanner}>
+          <View style={styles.filterBannerLeft}>
+            <Ionicons name="funnel" size={14} color={colors.primary} />
+            <Text style={styles.filterBannerText} numberOfLines={1}>
+              {customFilter.filterTitle || `Status: ${customFilter.status || 'Active Filter'}`}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={handleClearFilter} style={styles.clearFilterBtn}>
+            <Text style={styles.clearFilterText}>Clear</Text>
+            <Ionicons name="close-circle" size={14} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Tabs */}
       <View style={styles.tabsContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'HISTORY' && styles.tabActive]}
-          onPress={() => setActiveTab('HISTORY')}
+          onPress={() => {
+            setActiveTab('HISTORY');
+          }}
         >
           <Text style={[styles.tabText, activeTab === 'HISTORY' && styles.tabTextActive]} numberOfLines={1}>
             History
@@ -132,7 +195,9 @@ export const CallLogsScreen: React.FC = () => {
 
         <TouchableOpacity
           style={[styles.tab, activeTab === 'TODAY' && styles.tabActive]}
-          onPress={() => setActiveTab('TODAY')}
+          onPress={() => {
+            setActiveTab('TODAY');
+          }}
         >
           <Text style={[styles.tabText, activeTab === 'TODAY' && styles.tabTextActive]} numberOfLines={1}>
             Today
@@ -141,7 +206,9 @@ export const CallLogsScreen: React.FC = () => {
 
         <TouchableOpacity
           style={[styles.tab, activeTab === 'UPCOMING' && styles.tabActive]}
-          onPress={() => setActiveTab('UPCOMING')}
+          onPress={() => {
+            setActiveTab('UPCOMING');
+          }}
         >
           <Text style={[styles.tabText, activeTab === 'UPCOMING' && styles.tabTextActive]} numberOfLines={1}>
             Follow-ups
@@ -150,7 +217,9 @@ export const CallLogsScreen: React.FC = () => {
 
         <TouchableOpacity
           style={[styles.tab, activeTab === 'MISSED' && styles.tabActive]}
-          onPress={() => setActiveTab('MISSED')}
+          onPress={() => {
+            setActiveTab('MISSED');
+          }}
         >
           <Text style={[styles.tabText, activeTab === 'MISSED' && styles.tabTextActive]} numberOfLines={1}>
             Missed
@@ -246,14 +315,15 @@ export const CallLogsScreen: React.FC = () => {
               item.callStatus === 'NOT_ATTENDED' ||
               item.callStatus === 'MISSED' ||
               item.callStatus === 'NO_ANSWER' ||
-              item.callStatus === 'FAILED';
+              item.callStatus === 'FAILED' ||
+              item.durationSeconds === 0;
             const phone = item.leadPhone || (item as any).phoneNumber || '';
             const title = item.leadName || (item.leadId ? `Lead #${item.leadId}` : (phone || 'Call Record'));
 
             return (
               <Card
                 style={styles.logCard}
-                onPress={() => item.leadId ? handleOpenLead(item.leadId, item.leadName) : undefined}
+                onPress={() => (item.leadId ? handleOpenLead(item.leadId, item.leadName) : undefined)}
               >
                 <View style={styles.cardTop}>
                   <View style={styles.leadHeaderLeft}>
@@ -273,12 +343,12 @@ export const CallLogsScreen: React.FC = () => {
                         color={!isMissed ? colors.success : colors.danger}
                       />
                     </View>
-                    <View>
+                    <View style={{ flex: 1 }}>
                       <Text style={styles.leadName} numberOfLines={1}>
                         {title}
                       </Text>
                       <Text style={styles.phoneText}>
-                        {phone || 'No Phone'} • {formatDateTime(item.createdAt)}
+                        {phone || 'No Phone'} • {formatDateTime(item.createdAt || item.startedAt)}
                       </Text>
                     </View>
                   </View>
@@ -294,32 +364,37 @@ export const CallLogsScreen: React.FC = () => {
                 </View>
 
                 <View style={styles.metaChipsRow}>
-                  <Badge label={item.callStatus || (isMissed ? 'NOT_ATTENDED' : 'ACCEPTANCE')} status={item.callStatus || (isMissed ? 'NOT_ATTENDED' : 'ACCEPTANCE')} />
+                  <Badge label={item.callStatus || (isMissed ? 'NOT_ATTENDED' : 'CONNECTED')} status={item.callStatus || (isMissed ? 'NOT_ATTENDED' : 'CONNECTED')} />
                   {item.projectName && (
                     <View style={styles.projectPill}>
                       <Text style={styles.projectPillText}>{item.projectName}</Text>
                     </View>
                   )}
-                  {item.durationSeconds && !isMissed ? (
+                  {item.callDirection && (
+                    <View style={styles.projectPill}>
+                      <Text style={styles.projectPillText}>{item.callDirection}</Text>
+                    </View>
+                  )}
+                  {item.durationSeconds !== undefined && item.durationSeconds > 0 ? (
                     <Text style={styles.durationPill}>
                       {`${item.durationSeconds}s`}
                     </Text>
                   ) : null}
                 </View>
 
-              {item.notes ? (
-                <Text style={styles.notesText} numberOfLines={2}>
-                  {item.notes}
-                </Text>
-              ) : null}
-            </Card>
+                {item.notes ? (
+                  <Text style={styles.notesText} numberOfLines={2}>
+                    {item.notes}
+                  </Text>
+                ) : null}
+              </Card>
             );
           }}
           ListEmptyComponent={
             <EmptyState
               icon="call-outline"
               title="No Call Records"
-              description="No calls found for the selected view."
+              description="No calls found for the selected period or filter."
             />
           }
         />
@@ -332,6 +407,43 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  filterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  filterBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  filterBannerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+    flex: 1,
+  },
+  clearFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  clearFilterText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
   },
   tabsContainer: {
     flexDirection: 'row',

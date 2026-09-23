@@ -29,6 +29,7 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { LoadingState } from '../../components/common/LoadingState';
 import { EmptyState } from '../../components/common/EmptyState';
 import { callApi } from '../../api/callApi';
+import { usersApi } from '../../api/usersApi';
 import { Call, MainTabParamList, RootStackParamList } from '../../types';
 
 type CallTabFilter = 'ALL' | 'OUTBOUND' | 'INBOUND' | 'MISSED';
@@ -58,6 +59,7 @@ export const DialScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
 
   const [calls, setCalls] = useState<Call[]>([]);
+  const [userMap, setUserMap] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -210,8 +212,18 @@ export const DialScreen: React.FC = () => {
   const fetchCalls = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     try {
-      const res = await callApi.getCalls({ size: 50 });
+      const [res, activeUsers] = await Promise.all([
+        callApi.getCalls({ size: 50 }),
+        usersApi.getActiveUsers().catch(() => []),
+      ]);
       setCalls(res.content || []);
+      if (activeUsers && activeUsers.length > 0) {
+        const map: Record<number, string> = {};
+        activeUsers.forEach((u) => {
+          map[u.id] = u.name;
+        });
+        setUserMap(map);
+      }
     } catch (err: any) {
       console.warn('Failed to load calls:', err);
     } finally {
@@ -339,6 +351,11 @@ export const DialScreen: React.FC = () => {
     }
 
     const tagLabel = item.leadId ? 'CRM Lead' : 'Prospect';
+    const callerName =
+      item.userName ||
+      item.user?.name ||
+      (item.userId ? userMap[item.userId] : undefined) ||
+      'Admin';
 
     return (
       <View style={styles.callCard}>
@@ -384,18 +401,23 @@ export const DialScreen: React.FC = () => {
               >
                 <Ionicons name="call" size={15} color="#FFFFFF" />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.menuDotBtn} activeOpacity={0.7}>
-                <Ionicons name="ellipsis-vertical" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
             </View>
           </View>
         </TouchableOpacity>
 
-        {/* Bottom Tag chip */}
+        {/* Bottom Details: Tag chip & Called By line */}
         <View style={styles.tagChipRow}>
           <View style={styles.tagChip}>
             <Ionicons name="link-outline" size={10} color={colors.pastelGreenText} />
             <Text style={styles.tagChipText}>{tagLabel}</Text>
+          </View>
+
+          <View style={styles.calledByContainer}>
+            <Ionicons name="person-circle-outline" size={13} color={colors.textSecondary} />
+            <Text style={styles.calledByText}>
+              Called by:{' '}
+              <Text style={styles.calledByName}>{callerName}</Text>
+            </Text>
           </View>
         </View>
       </View>
@@ -404,12 +426,8 @@ export const DialScreen: React.FC = () => {
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.container}>
-      {/* MEQ Header with Search & Filter Buttons */}
-      <MeqHeader
-        rightMode="dial"
-        onPressSearch={() => {}}
-        onPressFilter={() => {}}
-      />
+      {/* MEQ Header */}
+      <MeqHeader />
 
       {/* Filter Chips: All / Outbound / Inbound / Missed */}
       <View style={styles.chipsRow}>
@@ -437,7 +455,7 @@ export const DialScreen: React.FC = () => {
         })}
       </View>
 
-      {/* Search Input Bar with Filter Slider Icon */}
+      {/* Search Input Bar */}
       <View style={styles.topSearchBar}>
         <Ionicons name="search-outline" size={18} color={colors.textMuted} />
         <TextInput
@@ -447,9 +465,11 @@ export const DialScreen: React.FC = () => {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-        <TouchableOpacity style={styles.sliderBtn} activeOpacity={0.7}>
-          <Ionicons name="options-outline" size={18} color={colors.textSecondary} />
-        </TouchableOpacity>
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
+            <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Live Sync Status Banner */}
@@ -555,7 +575,7 @@ export const DialScreen: React.FC = () => {
         onRequestClose={() => setDialPadModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.dialPadModalContent}>
+          <View style={[styles.dialPadModalContent, { paddingBottom: Math.max(insets.bottom, 24) }]}>
             <View style={styles.modalDragHandleRow}>
               <View style={styles.modalDragHandle} />
               <TouchableOpacity
@@ -844,8 +864,28 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   tagChipRow: {
-    marginTop: 6,
-    marginLeft: 52,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  calledByContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  calledByText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  calledByName: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
   },
   tagChip: {
     alignSelf: 'flex-start',

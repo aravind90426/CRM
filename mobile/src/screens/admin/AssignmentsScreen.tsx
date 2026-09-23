@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
@@ -24,6 +24,7 @@ import { GradientView } from '../../components/common/GradientView';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
+import { FormModal } from '../../components/common/FormModal';
 import { Badge } from '../../components/common/Badge';
 import { LoadingState } from '../../components/common/LoadingState';
 import { EmptyState } from '../../components/common/EmptyState';
@@ -33,7 +34,9 @@ import { Lead, User } from '../../types';
 
 export const AssignmentsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [agents, setAgents] = useState<User[]>([]);
@@ -66,6 +69,10 @@ export const AssignmentsScreen: React.FC = () => {
       hideSub.remove();
     };
   }, []);
+
+  const maxScrollHeight = keyboardVisible
+    ? Math.min(screenHeight * 0.25, 140)
+    : Math.min(screenHeight * 0.40, 260);
 
   // Compute responsive maximum height for middle agent list:
   // Compact when keyboard is active, expansive when keyboard is hidden
@@ -101,7 +108,12 @@ export const AssignmentsScreen: React.FC = () => {
 
   const handleOpenReassign = (lead: Lead) => {
     setSelectedLead(lead);
-    setSelectedAgentId(lead.currentOwner?.id || lead.assignedTo?.id || (agents[0]?.id ?? null));
+    const initialAgentId =
+      lead.currentOwnerId ||
+      lead.currentOwner?.id ||
+      lead.assignedTo?.id ||
+      (agents[0]?.id ?? null);
+    setSelectedAgentId(initialAgentId);
     setReassignReason('');
     setReassignModalVisible(true);
   };
@@ -130,20 +142,24 @@ export const AssignmentsScreen: React.FC = () => {
     }
   };
 
+  const isLeadAssigned = (l: Lead) => {
+    return !!(l.currentOwnerName || l.currentOwnerId || l.currentOwner || l.assignedTo);
+  };
+
   const filteredLeads = leads.filter((l) => {
     const matchesSearch =
       l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       l.phone.includes(searchQuery);
 
-    const isAssigned = !!(l.currentOwner || l.assignedTo);
+    const assigned = isLeadAssigned(l);
     if (filterMode === 'UNASSIGNED') {
-      return matchesSearch && !isAssigned;
+      return matchesSearch && !assigned;
     }
     return matchesSearch;
   });
 
   const renderLeadCard = ({ item }: { item: Lead }) => {
-    const ownerName = item.currentOwner?.name || item.assignedTo?.name;
+    const ownerName = item.currentOwnerName || item.currentOwner?.name || item.assignedTo?.name;
 
     return (
       <Card style={styles.leadCard}>
@@ -233,13 +249,13 @@ export const AssignmentsScreen: React.FC = () => {
                 style={styles.filterBtnActive}
               >
                 <Text style={styles.filterTextActive}>
-                  Unassigned ({leads.filter((l) => !(l.currentOwner || l.assignedTo)).length})
+                  Unassigned ({leads.filter((l) => !isLeadAssigned(l)).length})
                 </Text>
               </GradientView>
             ) : (
               <View style={styles.filterBtn}>
                 <Text style={styles.filterText}>
-                  Unassigned ({leads.filter((l) => !(l.currentOwner || l.assignedTo)).length})
+                  Unassigned ({leads.filter((l) => !isLeadAssigned(l)).length})
                 </Text>
               </View>
             )}
@@ -285,126 +301,77 @@ export const AssignmentsScreen: React.FC = () => {
         />
       )}
 
-      {/* Reassign Lead Modal */}
-      <Modal
+      {/* Reassign Lead Modal using strict 3-tier FormModal */}
+      <FormModal
         visible={reassignModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={handleCloseReassign}
+        onClose={handleCloseReassign}
+        title="Reassign Lead"
+        onSave={handleConfirmReassign}
+        saveTitle="Save"
+        saveLoading={submitting}
+        saveVariant="primary"
+        heightPercent={0.82}
+        maxHeightPixels={580}
+        scrollRef={scrollViewRef}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
-        >
-          {/* Backdrop click to dismiss */}
-          <TouchableOpacity
-            style={styles.modalBackdropTouchable}
-            activeOpacity={1}
-            onPress={handleCloseReassign}
-          />
-
-          <View
-            style={[
-              styles.modalCard,
-              { maxHeight: Math.min(screenHeight * 0.88, 680) },
-            ]}
-            onStartShouldSetResponder={() => true}
-          >
-            {/* 1. FIXED HEADER */}
-            <View style={styles.modalFixedHeader}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Reassign Lead</Text>
-                <TouchableOpacity
-                  onPress={handleCloseReassign}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name="close" size={22} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-
-              {selectedLead && (
-                <View style={styles.leadSummaryCard}>
-                  <Text style={styles.leadSummaryName}>{selectedLead.name}</Text>
-                  <Text style={styles.leadSummaryPhone}>{selectedLead.phone}</Text>
-                  <Text style={styles.leadSummaryCurrent}>
-                    Current Owner:{' '}
-                    {selectedLead.currentOwner?.name || selectedLead.assignedTo?.name || 'Unassigned'}
-                  </Text>
-                </View>
-              )}
-
-              <Text style={styles.fieldLabel}>
-                Select Target Sales Agent * {agents.length > 0 && `(${agents.length})`}
-              </Text>
-            </View>
-
-            {/* 2. SCROLLABLE MIDDLE CONTENT AREA: Only sales agents scroll */}
-            <View style={[styles.agentListWrapper, { maxHeight: maxAgentListHeight }]}>
-              <ScrollView
-                style={styles.agentScrollView}
-                contentContainerStyle={styles.agentScrollContent}
-                nestedScrollEnabled={true}
-                showsVerticalScrollIndicator={true}
-                keyboardShouldPersistTaps="handled"
-              >
-                {agents.map((ag) => (
-                  <TouchableOpacity
-                    key={ag.id}
-                    style={[
-                      styles.agentOption,
-                      selectedAgentId === ag.id && styles.agentOptionActive,
-                    ]}
-                    onPress={() => setSelectedAgentId(ag.id)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={selectedAgentId === ag.id ? 'radio-button-on' : 'radio-button-off'}
-                      size={18}
-                      color={selectedAgentId === ag.id ? colors.primary : colors.textMuted}
-                    />
-                    <View style={styles.agentOptionInfo}>
-                      <Text
-                        style={[
-                          styles.agentOptionName,
-                          selectedAgentId === ag.id && styles.agentOptionNameActive,
-                        ]}
-                      >
-                        {ag.name}
-                      </Text>
-                      <Text style={styles.agentOptionEmail}>{ag.email}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
-            {/* 3. FIXED FOOTER: Reason Input + Action Buttons */}
-            <View style={styles.modalFixedFooter}>
-              <Input
-                label="Reassignment Reason (Optional)"
-                placeholder="e.g. Workload balancing, language preference"
-                value={reassignReason}
-                onChangeText={setReassignReason}
-              />
-
-              <View style={styles.modalActions}>
-                <Button
-                  title="Cancel"
-                  variant="outline"
-                  onPress={handleCloseReassign}
-                  style={styles.modalActionBtn}
-                />
-                <Button
-                  title="Assign Lead"
-                  onPress={handleConfirmReassign}
-                  loading={submitting}
-                  style={styles.modalActionBtn}
-                />
-              </View>
-            </View>
+        {selectedLead && (
+          <View style={styles.leadSummaryCard}>
+            <Text style={styles.leadSummaryName}>{selectedLead.name}</Text>
+            <Text style={styles.leadSummaryPhone}>{selectedLead.phone}</Text>
+            <Text style={styles.leadSummaryCurrent}>
+              Current Owner:{' '}
+              {selectedLead.currentOwner?.name || selectedLead.assignedTo?.name || 'Unassigned'}
+            </Text>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        )}
+
+        <Text style={styles.fieldLabel}>
+          Select Target Sales Agent * {agents.length > 0 && `(${agents.length})`}
+        </Text>
+
+        {agents.map((ag) => (
+          <TouchableOpacity
+            key={ag.id}
+            style={[
+              styles.agentOption,
+              selectedAgentId === ag.id && styles.agentOptionActive,
+            ]}
+            onPress={() => setSelectedAgentId(ag.id)}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={selectedAgentId === ag.id ? 'radio-button-on' : 'radio-button-off'}
+              size={18}
+              color={selectedAgentId === ag.id ? colors.primary : colors.textMuted}
+            />
+            <View style={styles.agentOptionInfo}>
+              <Text
+                style={[
+                  styles.agentOptionName,
+                  selectedAgentId === ag.id && styles.agentOptionNameActive,
+                ]}
+              >
+                {ag.name}
+              </Text>
+              <Text style={styles.agentOptionEmail}>{ag.email}</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+
+        <View style={{ marginTop: spacing.sm }}>
+          <Input
+            label="Reassignment Reason (Optional)"
+            placeholder="e.g. Workload balancing, language preference"
+            value={reassignReason}
+            onChangeText={setReassignReason}
+            onFocus={() => {
+              setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+              }, 150);
+            }}
+          />
+        </View>
+      </FormModal>
     </SafeAreaView>
   );
 };
@@ -531,6 +498,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 440,
     alignSelf: 'center',
+    flexDirection: 'column',
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -540,6 +508,13 @@ const styles = StyleSheet.create({
   },
   modalFixedHeader: {
     flexShrink: 0,
+    marginBottom: spacing.xs,
+  },
+  modalScrollBody: {
+    width: '100%',
+  },
+  modalScrollContent: {
+    paddingBottom: spacing.sm,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -627,7 +602,10 @@ const styles = StyleSheet.create({
   },
   modalFixedFooter: {
     flexShrink: 0,
-    paddingTop: spacing.xs,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    marginTop: spacing.xs,
   },
   modalActions: {
     flexDirection: 'row',

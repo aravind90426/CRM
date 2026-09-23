@@ -64,11 +64,6 @@ export const TabNavigator: React.FC = () => {
             options={{ tabBarLabel: 'Dial' }}
           />
           <Tab.Screen
-            name="Reports"
-            component={ReportsScreen}
-            options={{ tabBarLabel: 'Reports' }}
-          />
-          <Tab.Screen
             name="AdminHub"
             component={AdminHubScreen}
             options={{ tabBarLabel: 'Admin' }}

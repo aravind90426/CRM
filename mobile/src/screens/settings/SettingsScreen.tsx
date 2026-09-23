@@ -28,7 +28,13 @@ import { API_BASE_URL, STORAGE_KEYS } from '../../config/constants';
 export const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, refreshProfile } = useAuth();
+
+  // Account & Profile edit state
+  const [showAccountProfile, setShowAccountProfile] = useState(false);
+  const [editName, setEditName] = useState(user?.name || '');
+  const [editPhone, setEditPhone] = useState(user?.phone || '');
+  const [profileSaving, setProfileSaving] = useState(false);
 
   // Request Admin Access state
   const [adminRequestStatus, setAdminRequestStatus] = useState<
@@ -44,12 +50,15 @@ export const SettingsScreen: React.FC = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
 
-  // Server URL configuration
-  const [serverUrl, setServerUrl] = useState(getApiBaseUrl());
-  const [showServerConfig, setShowServerConfig] = useState(false);
-
   // About App info
   const [showAboutApp, setShowAboutApp] = useState(false);
+
+  React.useEffect(() => {
+    if (user) {
+      setEditName(user.name || '');
+      setEditPhone(user.phone || '');
+    }
+  }, [user]);
 
   React.useEffect(() => {
     if (!isAdmin) {
@@ -60,6 +69,33 @@ export const SettingsScreen: React.FC = () => {
       }).catch(() => {});
     }
   }, [isAdmin]);
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      Alert.alert('Validation Error', 'Full Name is required.');
+      return;
+    }
+    setProfileSaving(true);
+    try {
+      await authApi.updateProfile({
+        name: editName.trim(),
+        phone: editPhone.trim(),
+      });
+      await refreshProfile();
+      Alert.alert('Success', 'Profile updated successfully.');
+      setShowAccountProfile(false);
+    } catch (err: any) {
+      Alert.alert('Update Failed', err.message || 'Unable to update profile.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleCancelProfileEdit = () => {
+    setEditName(user?.name || '');
+    setEditPhone(user?.phone || '');
+    setShowAccountProfile(false);
+  };
 
   const handleRequestAdminAccess = () => {
     if (adminRequestStatus === 'PENDING') {
@@ -124,19 +160,6 @@ export const SettingsScreen: React.FC = () => {
     }
   };
 
-  const handleSaveServerUrl = async () => {
-    if (!serverUrl.trim()) return;
-    try {
-      const trimmed = serverUrl.trim();
-      setApiBaseUrl(trimmed);
-      await AsyncStorage.setItem(STORAGE_KEYS.CUSTOM_API_URL, trimmed);
-      Alert.alert('Success', `Backend API URL set to: ${trimmed}`);
-      setShowServerConfig(false);
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    }
-  };
-
   const executeLogout = async () => {
     try {
       await logout();
@@ -166,20 +189,19 @@ export const SettingsScreen: React.FC = () => {
       ]);
     }
   };
-
   const roleLabel = isAdmin ? 'ADMIN' : 'AGENT';
   const initial = user?.name ? user.name.charAt(0).toUpperCase() : 'K';
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.container}>
       {/* Top Header: MEQ CRM Branding */}
-      <MeqHeader />
+      <MeqHeader onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined} />
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 110 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* User Profile Card (Screen 5 in Target Design) */}
+        {/* User Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.profileTopRow}>
             <GradientView
@@ -191,7 +213,7 @@ export const SettingsScreen: React.FC = () => {
 
             <View style={styles.profileDetails}>
               <Text style={styles.userName}>{user?.name || 'Kishore Kumar'}</Text>
-              <Text style={styles.userEmail}>{user?.email || 'kishore@meqcrm.com'}</Text>
+              <Text style={styles.userEmail}>{user?.email || 'kishore@qmex.com'}</Text>
               <View style={styles.badgeRow}>
                 <View style={styles.rolePill}>
                   <Text style={styles.rolePillText}>{roleLabel}</Text>
@@ -208,25 +230,84 @@ export const SettingsScreen: React.FC = () => {
           <View style={styles.profileBottomRow}>
             <View style={styles.phoneGroup}>
               <Ionicons name="call-outline" size={15} color="#6B7280" />
-              <Text style={styles.phoneText}>{user?.phone || '+91 98765 43210'}</Text>
+              <Text style={styles.phoneText}>{user?.phone || 'No phone added'}</Text>
             </View>
-            <TouchableOpacity activeOpacity={0.7}>
-              <Text style={styles.editProfileText}>Edit Profile ›</Text>
-            </TouchableOpacity>
+            <View style={styles.verifiedGroup}>
+              <Ionicons name="shield-checkmark" size={14} color="#16A34A" />
+              <Text style={styles.verifiedText}>Verified</Text>
+            </View>
           </View>
         </View>
 
         {/* Settings Navigation Menu Card */}
         <View style={styles.menuCard}>
-          {/* 1. Account & Profile */}
-          <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
+          {/* 1. Account & Profile (With Edit Form) */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            activeOpacity={0.7}
+            onPress={() => setShowAccountProfile(!showAccountProfile)}
+          >
             <IconTile name="person" variant="blue" size={38} iconSize={18} />
             <View style={styles.menuInfo}>
               <Text style={styles.menuTitle}>Account & Profile</Text>
-              <Text style={styles.menuSubtitle}>Personal details & role</Text>
+              <Text style={styles.menuSubtitle}>Personal details & edit profile</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+            <Ionicons
+              name={showAccountProfile ? 'chevron-up' : 'chevron-forward'}
+              size={18}
+              color="#9CA3AF"
+            />
           </TouchableOpacity>
+
+          {showAccountProfile && (
+            <View style={styles.embeddedForm}>
+              <Input
+                label="Full Name"
+                placeholder="Enter full name"
+                value={editName}
+                onChangeText={setEditName}
+                leftIcon="person-outline"
+              />
+              <Input
+                label="Phone Number"
+                placeholder="Enter phone number"
+                value={editPhone}
+                onChangeText={setEditPhone}
+                keyboardType="phone-pad"
+                leftIcon="call-outline"
+              />
+              <Input
+                label="Email (Read-only)"
+                value={user?.email || ''}
+                editable={false}
+                leftIcon="mail-outline"
+              />
+              <Input
+                label="Role (Read-only)"
+                value={roleLabel}
+                editable={false}
+                leftIcon="shield-outline"
+              />
+              <View style={styles.formActionRow}>
+                <TouchableOpacity
+                  style={[styles.formBtn, styles.cancelBtn]}
+                  onPress={handleCancelProfileEdit}
+                  disabled={profileSaving}
+                >
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.formBtn, styles.saveBtn, profileSaving && { opacity: 0.7 }]}
+                  onPress={handleSaveProfile}
+                  disabled={profileSaving}
+                >
+                  <Text style={styles.saveBtnText}>
+                    {profileSaving ? 'Saving...' : 'Save Changes'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           <View style={styles.menuDivider} />
 
@@ -352,67 +433,7 @@ export const SettingsScreen: React.FC = () => {
 
           <View style={styles.menuDivider} />
 
-          {/* 4. Call Permissions */}
-          <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
-            <IconTile name="call" variant="green" size={38} iconSize={18} />
-            <View style={styles.menuInfo}>
-              <Text style={styles.menuTitle}>Call Permissions</Text>
-              <Text style={styles.menuSubtitle}>Telephony, dialer & audio</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-          </TouchableOpacity>
-
-          <View style={styles.menuDivider} />
-
-          {/* 5. Backend Connection */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            activeOpacity={0.7}
-            onPress={() => setShowServerConfig(!showServerConfig)}
-          >
-            <IconTile name="server" variant="blue" size={38} iconSize={18} />
-            <View style={styles.menuInfo}>
-              <Text style={styles.menuTitle}>Backend Connection</Text>
-              <Text style={styles.menuSubtitle}>Configure Spring Boot host URL</Text>
-            </View>
-            <Ionicons
-              name={showServerConfig ? 'chevron-up' : 'chevron-forward'}
-              size={18}
-              color="#9CA3AF"
-            />
-          </TouchableOpacity>
-
-          {showServerConfig && (
-            <View style={styles.embeddedForm}>
-              <Input
-                label="API Base URL"
-                placeholder={API_BASE_URL}
-                value={serverUrl}
-                onChangeText={setServerUrl}
-                autoCapitalize="none"
-                leftIcon="globe-outline"
-              />
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                <TouchableOpacity
-                  style={styles.presetPill}
-                  onPress={() => setServerUrl(API_BASE_URL)}
-                >
-                  <Text style={styles.presetPillText}>Reset Default</Text>
-                </TouchableOpacity>
-              </View>
-              <Button
-                title="Save API URL"
-                onPress={handleSaveServerUrl}
-                variant="outline"
-                size="sm"
-                style={{ marginTop: 8 }}
-              />
-            </View>
-          )}
-
-          <View style={styles.menuDivider} />
-
-          {/* 6. Notifications */}
+          {/* 4. Notifications */}
           <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
             <IconTile name="notifications" variant="red" size={38} iconSize={18} />
             <View style={styles.menuInfo}>
@@ -424,7 +445,7 @@ export const SettingsScreen: React.FC = () => {
 
           <View style={styles.menuDivider} />
 
-          {/* 7. About App */}
+          {/* 5. About App */}
           <TouchableOpacity
             style={styles.menuItem}
             activeOpacity={0.7}
@@ -594,10 +615,47 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontWeight: '500',
   },
-  editProfileText: {
-    fontSize: 13,
+  verifiedGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  verifiedText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#4F46E5',
+    color: '#16A34A',
+  },
+  formActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  formBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtn: {
+    backgroundColor: '#E5E7EB',
+  },
+  cancelBtnText: {
+    color: '#374151',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  saveBtn: {
+    backgroundColor: colors.primary,
+  },
+  saveBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
   menuCard: {
     backgroundColor: colors.surface,

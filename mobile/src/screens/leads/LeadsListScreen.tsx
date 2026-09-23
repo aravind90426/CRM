@@ -13,8 +13,9 @@ import {
   Platform,
   Linking,
   TextInput,
+  useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
@@ -24,6 +25,7 @@ import { GradientView } from '../../components/common/GradientView';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
+import { FormModal } from '../../components/common/FormModal';
 import { Badge } from '../../components/common/Badge';
 import { LoadingState } from '../../components/common/LoadingState';
 import { EmptyState } from '../../components/common/EmptyState';
@@ -39,6 +41,8 @@ const STATUS_FILTERS = ['ALL', 'NEW', 'CONTACTED', 'IN_PROGRESS', 'FOLLOW_UP', '
 export const LeadsListScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
   const { isAdmin, user } = useAuth();
   const isMyLeadsMode = route.params?.mode === 'MY_LEADS';
 
@@ -96,6 +100,18 @@ export const LeadsListScreen: React.FC = () => {
     }
   }, [isAdmin]);
 
+  useEffect(() => {
+    if (route.params?.projectId !== undefined) {
+      setProjectId(route.params.projectId);
+    }
+    if (route.params?.projectName) {
+      setProjectName(route.params.projectName);
+    }
+    if (route.params?.status) {
+      setSelectedStatus(route.params.status);
+    }
+  }, [route.params?.projectId, route.params?.projectName, route.params?.status, route.params?.mode]);
+
   const fetchLeads = useCallback(
     async (isRefresh = false) => {
       if (!isRefresh) setLoading(true);
@@ -104,6 +120,7 @@ export const LeadsListScreen: React.FC = () => {
           projectId: projectId,
           status: selectedStatus === 'ALL' ? undefined : selectedStatus,
           search: searchQuery.trim() || undefined,
+          assignedToMe: isMyLeadsMode ? true : undefined,
           size: 50,
         });
         setLeads(res.content || []);
@@ -114,7 +131,7 @@ export const LeadsListScreen: React.FC = () => {
         setRefreshing(false);
       }
     },
-    [projectId, selectedStatus, searchQuery]
+    [projectId, selectedStatus, searchQuery, isMyLeadsMode]
   );
 
   useEffect(() => {
@@ -343,20 +360,22 @@ export const LeadsListScreen: React.FC = () => {
             : () => navigation.goBack()
         }
         rightElement={
-          <TouchableOpacity
-            style={styles.addLeadBtn}
-            onPress={handleOpenAddLead}
-            activeOpacity={0.7}
-          >
-            <GradientView
-              colors={colors.primaryGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.addLeadGradient}
+          isAdmin ? (
+            <TouchableOpacity
+              style={styles.addLeadBtn}
+              onPress={handleOpenAddLead}
+              activeOpacity={0.7}
             >
-              <Ionicons name="person-add" size={15} color="#ffffff" />
-            </GradientView>
-          </TouchableOpacity>
+              <GradientView
+                colors={colors.primaryGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.addLeadGradient}
+              >
+                <Ionicons name="person-add" size={15} color="#ffffff" />
+              </GradientView>
+            </TouchableOpacity>
+          ) : undefined
         }
       />
 
@@ -408,6 +427,7 @@ export const LeadsListScreen: React.FC = () => {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.statusScrollView}
         contentContainerStyle={styles.statusFiltersContainer}
       >
         {STATUS_FILTERS.map((s) => {
@@ -421,7 +441,6 @@ export const LeadsListScreen: React.FC = () => {
               : s === 'FOLLOW_UP'
               ? 'Follow Up'
               : s.charAt(0) + s.slice(1).toLowerCase();
-          const displayLabel = count !== undefined && count > 0 ? `${label} ${count}` : label;
 
           return (
             <TouchableOpacity
@@ -436,11 +455,21 @@ export const LeadsListScreen: React.FC = () => {
                   end={{ x: 1, y: 0 }}
                   style={styles.statusChipActive}
                 >
-                  <Text style={styles.statusChipTextActive}>{displayLabel}</Text>
+                  <Text style={styles.statusChipTextActive} numberOfLines={1}>{label}</Text>
+                  {count !== undefined && count > 0 && (
+                    <View style={styles.statusCountBadgeActive}>
+                      <Text style={styles.statusCountTextActive}>{count}</Text>
+                    </View>
+                  )}
                 </GradientView>
               ) : (
                 <View style={styles.statusChip}>
-                  <Text style={styles.statusChipText}>{displayLabel}</Text>
+                  <Text style={styles.statusChipText} numberOfLines={1}>{label}</Text>
+                  {count !== undefined && count > 0 && (
+                    <View style={styles.statusCountBadge}>
+                      <Text style={styles.statusCountText}>{count}</Text>
+                    </View>
+                  )}
                 </View>
               )}
             </TouchableOpacity>
@@ -471,24 +500,29 @@ export const LeadsListScreen: React.FC = () => {
       {loading && !refreshing ? (
         <LoadingState message="Loading leads..." fullScreen />
       ) : leads.length === 0 ? (
-        <EmptyState
-          icon="people-outline"
-          title={searchQuery || selectedStatus !== 'ALL' ? 'No Leads Found' : 'No Leads Available'}
-          description={
-            searchQuery || selectedStatus !== 'ALL'
-              ? 'No leads match the selected filters or search.'
-              : 'No leads available in this project.'
-          }
-          actionTitle={searchQuery || selectedStatus !== 'ALL' ? 'Clear Filters' : 'Add Lead'}
-          onAction={
-            searchQuery || selectedStatus !== 'ALL'
-              ? () => {
-                  setSelectedStatus('ALL');
-                  setSearchQuery('');
-                }
-              : handleOpenAddLead
-          }
-        />
+        <View style={styles.emptyContainer}>
+          <EmptyState
+            icon="people-outline"
+            title={searchQuery || selectedStatus !== 'ALL' ? 'No Leads Found' : 'No Leads Available'}
+            description={
+              searchQuery || selectedStatus !== 'ALL'
+                ? 'No leads match the selected filters or search.'
+                : 'No leads available in this project.'
+            }
+            actionTitle={searchQuery || selectedStatus !== 'ALL' ? 'Clear Filters' : isAdmin ? 'Add Lead' : undefined}
+            onAction={
+              searchQuery || selectedStatus !== 'ALL'
+                ? () => {
+                    setSelectedStatus('ALL');
+                    setSearchQuery('');
+                  }
+                : isAdmin
+                ? handleOpenAddLead
+                : undefined
+            }
+            style={styles.emptyStateStyle}
+          />
+        </View>
       ) : (
         <FlatList
           data={leads}
@@ -522,145 +556,124 @@ export const LeadsListScreen: React.FC = () => {
       )}
 
       {/* Add Lead Modal */}
-      <Modal visible={addModalVisible} transparent animationType="fade">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
+      <FormModal
+        visible={addModalVisible}
+        onClose={() => setAddModalVisible(false)}
+        title="Add New Lead"
+        onSave={handleCreateLead}
+        saveTitle="Save"
+        saveLoading={submitting}
+        saveVariant="primary"
+        heightPercent={0.85}
+        maxHeightPixels={620}
+      >
+        <Input
+          label="Customer Name *"
+          placeholder="e.g. John Doe"
+          value={newLeadName}
+          onChangeText={setNewLeadName}
+        />
+
+        <Input
+          label="Phone Number *"
+          placeholder="+91 98765 43210"
+          value={newLeadPhone}
+          onChangeText={setNewLeadPhone}
+          keyboardType="phone-pad"
+        />
+
+        <Input
+          label="Email Address"
+          placeholder="john@example.com"
+          value={newLeadEmail}
+          onChangeText={setNewLeadEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+
+        <Input
+          label="City / Location"
+          placeholder="e.g. Mumbai"
+          value={newLeadCity}
+          onChangeText={setNewLeadCity}
+        />
+
+        {/* Project Selector */}
+        <Text style={styles.fieldLabel}>Select Project *</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.modalProjectPicker}
         >
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New Lead</Text>
-              <TouchableOpacity onPress={() => setAddModalVisible(false)}>
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-              <Input
-                label="Customer Name *"
-                placeholder="e.g. John Doe"
-                value={newLeadName}
-                onChangeText={setNewLeadName}
-              />
-
-              <Input
-                label="Phone Number *"
-                placeholder="+91 98765 43210"
-                value={newLeadPhone}
-                onChangeText={setNewLeadPhone}
-                keyboardType="phone-pad"
-              />
-
-              <Input
-                label="Email Address"
-                placeholder="john@example.com"
-                value={newLeadEmail}
-                onChangeText={setNewLeadEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-
-              <Input
-                label="City / Location"
-                placeholder="e.g. Mumbai"
-                value={newLeadCity}
-                onChangeText={setNewLeadCity}
-              />
-
-              {/* Project Selector */}
-              <Text style={styles.fieldLabel}>Select Project *</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.modalProjectPicker}
+          {projects.map((p) => (
+            <TouchableOpacity
+              key={p.id}
+              style={[
+                styles.modalProjPill,
+                newLeadProject === p.id && styles.modalProjPillActive,
+              ]}
+              onPress={() => setNewLeadProject(p.id)}
+            >
+              <Text
+                style={[
+                  styles.modalProjPillText,
+                  newLeadProject === p.id && styles.modalProjPillTextActive,
+                ]}
               >
-                {projects.map((p) => (
-                  <TouchableOpacity
-                    key={p.id}
+                {p.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Agent Assign (Admin only) */}
+        {isAdmin && agents.length > 0 && (
+          <View style={{ marginTop: spacing.xs }}>
+            <Text style={styles.fieldLabel}>Assign To Agent (Optional)</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.modalProjectPicker}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.modalProjPill,
+                  newLeadAgent === null && styles.modalProjPillActive,
+                ]}
+                onPress={() => setNewLeadAgent(null)}
+              >
+                <Text
+                  style={[
+                    styles.modalProjPillText,
+                    newLeadAgent === null && styles.modalProjPillTextActive,
+                  ]}
+                >
+                  Unassigned
+                </Text>
+              </TouchableOpacity>
+              {agents.map((ag) => (
+                <TouchableOpacity
+                  key={ag.id}
+                  style={[
+                    styles.modalProjPill,
+                    newLeadAgent === ag.id && styles.modalProjPillActive,
+                  ]}
+                  onPress={() => setNewLeadAgent(ag.id)}
+                >
+                  <Text
                     style={[
-                      styles.modalProjPill,
-                      newLeadProject === p.id && styles.modalProjPillActive,
+                      styles.modalProjPillText,
+                      newLeadAgent === ag.id && styles.modalProjPillTextActive,
                     ]}
-                    onPress={() => setNewLeadProject(p.id)}
                   >
-                    <Text
-                      style={[
-                        styles.modalProjPillText,
-                        newLeadProject === p.id && styles.modalProjPillTextActive,
-                      ]}
-                    >
-                      {p.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Agent Assign (Admin only) */}
-              {isAdmin && agents.length > 0 && (
-                <View style={{ marginTop: spacing.xs }}>
-                  <Text style={styles.fieldLabel}>Assign To Agent (Optional)</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.modalProjectPicker}
-                  >
-                    <TouchableOpacity
-                      style={[
-                        styles.modalProjPill,
-                        newLeadAgent === null && styles.modalProjPillActive,
-                      ]}
-                      onPress={() => setNewLeadAgent(null)}
-                    >
-                      <Text
-                        style={[
-                          styles.modalProjPillText,
-                          newLeadAgent === null && styles.modalProjPillTextActive,
-                        ]}
-                      >
-                        Unassigned
-                      </Text>
-                    </TouchableOpacity>
-                    {agents.map((ag) => (
-                      <TouchableOpacity
-                        key={ag.id}
-                        style={[
-                          styles.modalProjPill,
-                          newLeadAgent === ag.id && styles.modalProjPillActive,
-                        ]}
-                        onPress={() => setNewLeadAgent(ag.id)}
-                      >
-                        <Text
-                          style={[
-                            styles.modalProjPillText,
-                            newLeadAgent === ag.id && styles.modalProjPillTextActive,
-                          ]}
-                        >
-                          {ag.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
+                    {ag.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </ScrollView>
-
-            <View style={styles.modalActions}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                onPress={() => setAddModalVisible(false)}
-                style={styles.modalActionBtn}
-              />
-              <Button
-                title="Save Lead"
-                onPress={handleCreateLead}
-                loading={submitting}
-                style={styles.modalActionBtn}
-              />
-            </View>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        )}
+      </FormModal>
 
       {/* Project Bottom Sheet Modal */}
       <Modal
@@ -771,11 +784,9 @@ export const LeadsListScreen: React.FC = () => {
                           {p.name}
                         </Text>
                       </View>
-                      {p.assignedLeadsCount !== undefined ? (
-                        <Text style={styles.sheetCountText}>
-                          {p.assignedLeadsCount} leads
-                        </Text>
-                      ) : null}
+                      <Text style={styles.sheetCountText}>
+                        {(p.assignedLeadsCount ?? p.totalLeads ?? 0)} leads
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -810,9 +821,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: colors.surfaceCard,
     paddingHorizontal: spacing.normal,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm - 1,
     marginHorizontal: spacing.md,
-    marginTop: spacing.xs,
+    marginTop: 4,
+    marginBottom: 2,
     borderRadius: spacing.borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border,
@@ -865,7 +877,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginHorizontal: spacing.md,
-    marginTop: spacing.xs,
+    marginTop: 4,
     marginBottom: 2,
   },
   projectSelectorLabel: {
@@ -899,43 +911,88 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   // Compact Status Filter Chips
+  statusScrollView: {
+    flexGrow: 0,
+    marginVertical: 4,
+  },
   statusFiltersContainer: {
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    gap: 6,
+    paddingVertical: 4,
+    gap: 8,
     alignItems: 'center',
+    flexDirection: 'row',
   },
   statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
+    paddingVertical: 7,
+    borderRadius: 20,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+    flexShrink: 0,
   },
   statusChipActive: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-    overflow: 'hidden',
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    gap: 6,
+    flexShrink: 0,
   },
   statusChipText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.textSecondary,
   },
   statusChipTextActive: {
     color: '#ffffff',
     fontWeight: '700',
+    fontSize: 12,
+  },
+  statusCountBadge: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    minWidth: 18,
+    alignItems: 'center',
+  },
+  statusCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  statusCountBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    minWidth: 18,
+    alignItems: 'center',
+  },
+  statusCountTextActive: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#ffffff',
   },
   // Search Bar
   searchWrapper: {
     paddingHorizontal: spacing.md,
-    paddingVertical: 4,
+    paddingVertical: 3,
+    marginBottom: 2,
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: spacing.lg,
+  },
+  emptyStateStyle: {
+    paddingVertical: spacing.sm,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -960,7 +1017,7 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
-    paddingBottom: spacing.xl,
+    paddingBottom: 110,
   },
   leadCard: {
     padding: spacing.sm + 2,
@@ -1088,6 +1145,18 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    maxHeight: '90%',
+    width: '100%',
+    maxWidth: 460,
+    alignSelf: 'center',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  modalScrollBody: {
+    width: '100%',
+  },
+  modalScrollContent: {
+    paddingBottom: spacing.sm,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1135,6 +1204,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    flexShrink: 0,
   },
   modalActionBtn: {
     flex: 1,

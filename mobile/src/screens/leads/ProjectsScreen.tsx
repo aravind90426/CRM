@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { MeqHeader } from '../../components/common/MeqHeader';
@@ -49,7 +49,7 @@ export const ProjectsScreen: React.FC = () => {
     setError(null);
     try {
       const data = await leadApi.getActiveProjects();
-      setProjects(data);
+      setProjects(data || []);
     } catch (err: any) {
       setError(err.message || 'Failed to load projects');
     } finally {
@@ -58,9 +58,11 @@ export const ProjectsScreen: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchProjects(true);
+    }, [fetchProjects])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -89,88 +91,87 @@ export const ProjectsScreen: React.FC = () => {
   const handlePressNew = () => {
     if (isAdmin) {
       navigation.navigate('AdminProjects');
-    } else {
-      navigation.navigate('LeadsList', {
-        mode: 'PROJECT',
-        projectName: 'All Leads',
-      });
     }
   };
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.container}>
-      {/* Top MEQ Header with "+ New" Gradient Pill Button */}
+      {/* Top MEQ Header with "+ New" Gradient Pill Button ONLY FOR ADMIN */}
       <MeqHeader
         rightElement={
-          <TouchableOpacity activeOpacity={0.8} onPress={handlePressNew}>
-            <GradientView
-              colors={colors.primaryGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.newButton}
-            >
-              <Ionicons name="add" size={16} color="#FFFFFF" />
-              <Text style={styles.newButtonText}>New</Text>
-            </GradientView>
-          </TouchableOpacity>
+          isAdmin ? (
+            <TouchableOpacity activeOpacity={0.8} onPress={handlePressNew}>
+              <GradientView
+                colors={colors.primaryGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.newButton}
+              >
+                <Ionicons name="add" size={16} color="#FFFFFF" />
+                <Text style={styles.newButtonText}>New</Text>
+              </GradientView>
+            </TouchableOpacity>
+          ) : undefined
         }
       />
 
       {/* Screen Title Block */}
       <View style={styles.titleSection}>
-        <Text style={styles.screenHeading}>Leads & Projects</Text>
+        <Text style={styles.screenHeading}>Leads</Text>
         <Text style={styles.screenSubheading}>
-          Manage assigned leads & campaign pipelines
+          {isAdmin ? 'Manage assigned leads & campaign pipelines' : 'Projects with your assigned leads'}
         </Text>
       </View>
 
-      {/* Segmented Control Tabs */}
-      <View style={styles.segmentContainer}>
-        <TouchableOpacity
-          style={styles.segmentTab}
-          activeOpacity={0.8}
-          onPress={() => setActiveSegment('PROJECTS')}
-        >
-          {activeSegment === 'PROJECTS' ? (
-            <GradientView
-              colors={colors.primaryGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.activeSegmentPill}
-            >
-              <Text style={styles.activeSegmentText}>Projects</Text>
-            </GradientView>
-          ) : (
-            <View style={styles.inactiveSegmentPill}>
-              <Text style={styles.inactiveSegmentText}>Projects</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+      {/* Segmented Control Tabs ONLY FOR ADMIN */}
+      {isAdmin && (
+        <View style={styles.segmentContainer}>
+          <TouchableOpacity
+            style={styles.segmentTab}
+            activeOpacity={0.8}
+            onPress={() => setActiveSegment('PROJECTS')}
+          >
+            {activeSegment === 'PROJECTS' ? (
+              <GradientView
+                colors={colors.primaryGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.activeSegmentPill}
+              >
+                <Text style={styles.activeSegmentText}>Projects</Text>
+              </GradientView>
+            ) : (
+              <View style={styles.inactiveSegmentPill}>
+                <Text style={styles.inactiveSegmentText}>Projects</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.segmentTab}
-          activeOpacity={0.8}
-          onPress={() => {
-            setActiveSegment('MY_LEADS');
-            handleOpenMyLeads();
-          }}
-        >
-          {activeSegment === 'MY_LEADS' ? (
-            <GradientView
-              colors={colors.primaryGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.activeSegmentPill}
-            >
-              <Text style={styles.activeSegmentText}>My Leads</Text>
-            </GradientView>
-          ) : (
-            <View style={styles.inactiveSegmentPill}>
-              <Text style={styles.inactiveSegmentText}>My Leads</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={styles.segmentTab}
+            activeOpacity={0.8}
+            onPress={() => {
+              setActiveSegment('MY_LEADS');
+              handleOpenMyLeads();
+            }}
+          >
+            {activeSegment === 'MY_LEADS' ? (
+              <GradientView
+                colors={colors.primaryGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.activeSegmentPill}
+              >
+                <Text style={styles.activeSegmentText}>My Leads</Text>
+              </GradientView>
+            ) : (
+              <View style={styles.inactiveSegmentPill}>
+                <Text style={styles.inactiveSegmentText}>My Leads</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Rounded Search Bar */}
       <View style={styles.searchContainer}>
@@ -192,7 +193,7 @@ export const ProjectsScreen: React.FC = () => {
       </View>
 
       {loading && !refreshing ? (
-        <LoadingState message="Loading pipelines..." fullScreen />
+        <LoadingState message="Loading projects..." fullScreen />
       ) : error ? (
         <ErrorState message={error} onRetry={() => fetchProjects()} fullScreen />
       ) : (
@@ -211,9 +212,7 @@ export const ProjectsScreen: React.FC = () => {
           renderItem={({ item, index }) => {
             const variant = ICON_VARIANTS[index % ICON_VARIANTS.length];
             const iconName = PROJECT_ICONS[index % PROJECT_ICONS.length];
-            const leadsCount = item.assignedLeadsCount ?? 0;
-            // Simulated progress percentage between 35% and 85% based on id for demo fidelity
-            const progressPercent = Math.min(85, Math.max(35, ((item.id * 17) % 55) + 30));
+            const leadsCount = item.assignedLeadsCount ?? item.totalLeads ?? 0;
 
             return (
               <TouchableOpacity
@@ -234,7 +233,7 @@ export const ProjectsScreen: React.FC = () => {
                       {item.name}
                     </Text>
                     <Text style={styles.projectSubtitle}>
-                      {leadsCount} {leadsCount === 1 ? 'lead' : 'leads'} • {progressPercent}% completed
+                      {leadsCount} {leadsCount === 1 ? 'Assigned Lead' : 'Assigned Leads'}
                     </Text>
                   </View>
 
@@ -243,21 +242,12 @@ export const ProjectsScreen: React.FC = () => {
                       {item.status || 'ACTIVE'}
                     </Text>
                   </View>
-
-                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" style={{ marginLeft: 4 }} />
                 </View>
 
-                {/* Progress Bar Strip */}
-                <View style={styles.progressRow}>
-                  <View style={styles.progressBarTrack}>
-                    <GradientView
-                      colors={colors.progressGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={[styles.progressBarFill, { width: `${progressPercent}%` }]}
-                    />
-                  </View>
-                  <Text style={styles.progressText}>{progressPercent}%</Text>
+                {/* View Leads Link */}
+                <View style={styles.viewLeadsFooter}>
+                  <Text style={styles.viewLeadsText}>View Leads</Text>
+                  <Ionicons name="arrow-forward" size={14} color={colors.primary} />
                 </View>
               </TouchableOpacity>
             );
@@ -265,8 +255,8 @@ export const ProjectsScreen: React.FC = () => {
           ListEmptyComponent={
             <EmptyState
               icon="briefcase-outline"
-              title="No Projects Found"
-              message="No campaigns match your search query."
+              title="No Assigned Leads"
+              description="No projects currently contain leads assigned to your account."
             />
           }
         />
@@ -408,6 +398,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     marginTop: 2,
+    fontWeight: '600',
   },
   statusPill: {
     backgroundColor: '#DCFCE7',
@@ -421,31 +412,19 @@ const styles = StyleSheet.create({
     color: '#16A34A',
     letterSpacing: 0.4,
   },
-  progressRow: {
+  viewLeadsFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 12,
-    paddingTop: 10,
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
   },
-  progressBarTrack: {
-    flex: 1,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#F3F4F6',
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  progressText: {
-    fontSize: 11,
+  viewLeadsText: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#6B7280',
-    width: 30,
-    textAlign: 'right',
+    color: colors.primary,
   },
 });

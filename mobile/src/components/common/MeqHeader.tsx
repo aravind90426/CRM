@@ -111,14 +111,14 @@ export const MeqHeader: React.FC<MeqHeaderProps> = ({
               <Text style={styles.logoLetter}>Q</Text>
             </View>
             <View style={styles.logoTextCol}>
-              <Text style={styles.logoMeq}>MEQ</Text>
+              <Text style={styles.logoMeq}>QMEX</Text>
               <Text style={styles.logoCrm}>CRM</Text>
             </View>
           </View>
         ) : (
           <View style={styles.titleCol}>
-            {title && <Text style={styles.screenTitle}>{title}</Text>}
-            {subtitle && <Text style={styles.screenSubtitle}>{subtitle}</Text>}
+            {title && <Text style={styles.screenTitle} numberOfLines={1}>{title}</Text>}
+            {subtitle && <Text style={styles.screenSubtitle} numberOfLines={1} ellipsizeMode="tail">{subtitle}</Text>}
           </View>
         )}
       </View>
@@ -138,9 +138,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   leftContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    marginRight: 8,
   },
   backBtn: {
     width: 36,
@@ -192,19 +194,21 @@ const styles = StyleSheet.create({
     lineHeight: 10,
   },
   titleCol: {
+    flex: 1,
     justifyContent: 'center',
   },
   screenTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     color: colors.textPrimary,
   },
   screenSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
     marginTop: 1,
   },
   rightContainer: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
   },

@@ -115,8 +115,43 @@ export const Button: React.FC<ButtonProps> = ({
     }
   };
 
+  const flattenedStyle = StyleSheet.flatten(style) || {};
+  const {
+    flex,
+    flexGrow,
+    flexShrink,
+    width,
+    minWidth,
+    maxWidth,
+    margin,
+    marginHorizontal,
+    marginVertical,
+    marginLeft,
+    marginRight,
+    marginTop,
+    marginBottom,
+    alignSelf,
+    ...touchableStyle
+  } = flattenedStyle as any;
+
+  const containerStyle: ViewStyle = {};
+  if (flex !== undefined) containerStyle.flex = flex;
+  if (flexGrow !== undefined) containerStyle.flexGrow = flexGrow;
+  if (flexShrink !== undefined) containerStyle.flexShrink = flexShrink;
+  if (width !== undefined) containerStyle.width = width;
+  if (minWidth !== undefined) containerStyle.minWidth = minWidth;
+  if (maxWidth !== undefined) containerStyle.maxWidth = maxWidth;
+  if (margin !== undefined) containerStyle.margin = margin;
+  if (marginHorizontal !== undefined) containerStyle.marginHorizontal = marginHorizontal;
+  if (marginVertical !== undefined) containerStyle.marginVertical = marginVertical;
+  if (marginLeft !== undefined) containerStyle.marginLeft = marginLeft;
+  if (marginRight !== undefined) containerStyle.marginRight = marginRight;
+  if (marginTop !== undefined) containerStyle.marginTop = marginTop;
+  if (marginBottom !== undefined) containerStyle.marginBottom = marginBottom;
+  if (alignSelf !== undefined) containerStyle.alignSelf = alignSelf;
+
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, containerStyle]}>
       <TouchableOpacity
         style={[
           styles.button,
@@ -125,9 +160,10 @@ export const Button: React.FC<ButtonProps> = ({
             borderColor: getBorderColor(),
             height: getHeight(),
             borderWidth: variant === 'outline' ? 1 : 0,
+            width: width ? '100%' : undefined,
           },
           disabled && styles.disabled,
-          style,
+          touchableStyle,
         ]}
         onPress={onPress}
         onPressIn={handlePressIn}

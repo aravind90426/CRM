@@ -9,9 +9,11 @@ import {
   Modal,
   Alert,
   KeyboardAvoidingView,
+  ScrollView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
@@ -21,6 +23,7 @@ import { GradientView } from '../../components/common/GradientView';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
+import { FormModal } from '../../components/common/FormModal';
 import { LoadingState } from '../../components/common/LoadingState';
 import { EmptyState } from '../../components/common/EmptyState';
 import { projectsApi } from '../../api/projectsApi';
@@ -28,6 +31,8 @@ import { Project } from '../../types';
 
 export const AdminProjectsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,15 +182,20 @@ export const AdminProjectsScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.actionBtn}
             onPress={() =>
-              navigation.navigate('Main', {
+              navigation.navigate('Main' as any, {
                 screen: 'Leads',
-                params: { projectId: item.id, projectName: item.name },
-              })
+                params: {
+                  screen: 'LeadsList',
+                  params: { projectId: item.id, projectName: item.name },
+                },
+              } as any)
             }
             activeOpacity={0.7}
           >
             <Ionicons name="people-outline" size={14} color={colors.primary} />
-            <Text style={styles.actionBtnText}>View Leads ({item.assignedLeadsCount ?? 0})</Text>
+            <Text style={styles.actionBtnText}>
+              View Leads ({item.assignedLeadsCount ?? item.totalLeads ?? 0})
+            </Text>
           </TouchableOpacity>
 
           <View style={styles.btnGroup}>
@@ -264,93 +274,72 @@ export const AdminProjectsScreen: React.FC = () => {
       )}
 
       {/* Add / Edit Project Modal */}
-      <Modal visible={modalVisible} transparent animationType="fade">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editingProject ? 'Edit Project' : 'New CRM Project'}
+      <FormModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        title={editingProject ? 'Edit Project' : 'New CRM Project'}
+        onSave={handleSubmit}
+        saveTitle="Save"
+        saveLoading={submitting}
+        saveVariant="primary"
+        heightPercent={0.82}
+        maxHeightPixels={580}
+      >
+        <Input
+          label="Project Name *"
+          placeholder="e.g. Prestige Heights Phase 2"
+          value={projectName}
+          onChangeText={setProjectName}
+        />
+
+        <Input
+          label="Description (Optional)"
+          placeholder="Campaign objective or property details"
+          value={projectDescription}
+          onChangeText={setProjectDescription}
+          multiline
+          numberOfLines={3}
+        />
+
+        <View style={styles.statusToggleContainer}>
+          <Text style={styles.fieldLabel}>Status</Text>
+          <View style={styles.statusRow}>
+            <TouchableOpacity
+              style={[
+                styles.statusOption,
+                projectStatus === 'ACTIVE' && styles.statusOptionActive,
+              ]}
+              onPress={() => setProjectStatus('ACTIVE')}
+            >
+              <Text
+                style={[
+                  styles.statusOptionText,
+                  projectStatus === 'ACTIVE' && styles.statusOptionTextActive,
+                ]}
+              >
+                Active
               </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
 
-            <Input
-              label="Project Name *"
-              placeholder="e.g. Prestige Heights Phase 2"
-              value={projectName}
-              onChangeText={setProjectName}
-            />
-
-            <Input
-              label="Description (Optional)"
-              placeholder="Campaign objective or property details"
-              value={projectDescription}
-              onChangeText={setProjectDescription}
-              multiline
-              numberOfLines={3}
-            />
-
-            <View style={styles.statusToggleContainer}>
-              <Text style={styles.fieldLabel}>Status</Text>
-              <View style={styles.statusRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.statusOption,
-                    projectStatus === 'ACTIVE' && styles.statusOptionActive,
-                  ]}
-                  onPress={() => setProjectStatus('ACTIVE')}
-                >
-                  <Text
-                    style={[
-                      styles.statusOptionText,
-                      projectStatus === 'ACTIVE' && styles.statusOptionTextActive,
-                    ]}
-                  >
-                    Active
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.statusOption,
-                    projectStatus === 'INACTIVE' && styles.statusOptionActive,
-                  ]}
-                  onPress={() => setProjectStatus('INACTIVE')}
-                >
-                  <Text
-                    style={[
-                      styles.statusOptionText,
-                      projectStatus === 'INACTIVE' && styles.statusOptionTextActive,
-                    ]}
-                  >
-                    Inactive
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.modalActions}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                onPress={() => setModalVisible(false)}
-                style={styles.modalActionBtn}
-              />
-              <Button
-                title={editingProject ? 'Update' : 'Create'}
-                onPress={handleSubmit}
-                loading={submitting}
-                style={styles.modalActionBtn}
-              />
-            </View>
+            <TouchableOpacity
+              style={[
+                styles.statusOption,
+                projectStatus === 'INACTIVE' && styles.statusOptionActive,
+              ]}
+              onPress={() => setProjectStatus('INACTIVE')}
+            >
+              <Text
+                style={[
+                  styles.statusOptionText,
+                  projectStatus === 'INACTIVE' && styles.statusOptionTextActive,
+                ]}
+              >
+                Inactive
+              </Text>
+            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        </View>
+      </FormModal>
     </SafeAreaView>
   );
 };
@@ -467,6 +456,18 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    maxHeight: '90%',
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  modalScrollBody: {
+    width: '100%',
+  },
+  modalScrollContent: {
+    paddingBottom: spacing.sm,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -478,6 +479,15 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: colors.textPrimary,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    flexShrink: 0,
   },
   statusToggleContainer: {
     marginBottom: spacing.md,

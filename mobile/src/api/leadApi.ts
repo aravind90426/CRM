@@ -12,6 +12,8 @@ export const leadApi = {
     status?: string;
     outcome?: string;
     search?: string;
+    assignedToMe?: boolean;
+    assignedUserId?: number;
     page?: number;
     size?: number;
   }): Promise<PageResponse<Lead>> => {
@@ -23,6 +25,8 @@ export const leadApi = {
         status: params?.status,
         outcome: params?.outcome,
         search: params?.search,
+        assignedToMe: params?.assignedToMe,
+        assignedUserId: params?.assignedUserId,
       },
     });
     return res.data.data;

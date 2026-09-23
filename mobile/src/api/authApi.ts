@@ -23,4 +23,9 @@ export const authApi = {
     });
     return res.data.message || 'Password changed successfully';
   },
+
+  updateProfile: async (data: { name: string; phone?: string }): Promise<User> => {
+    const res = await apiClient.put<ApiResponse<User>>('/auth/profile', data);
+    return res.data.data;
+  },
 };

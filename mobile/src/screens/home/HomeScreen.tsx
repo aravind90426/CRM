@@ -165,6 +165,7 @@ export const HomeScreen: React.FC = () => {
         rightMode="home"
         avatarInitial={user?.name ? user.name.charAt(0) : 'K'}
         onPressAvatar={() => navigation.navigate('Settings')}
+        onPressBell={() => navigation.navigate('Notifications')}
       />
 
       <ScrollView
@@ -199,7 +200,7 @@ export const HomeScreen: React.FC = () => {
           <View style={styles.statTilesRow}>
             <TouchableOpacity
               style={styles.statTile}
-              onPress={() => (navigation as any).navigate('Dial')}
+              onPress={() => navigation.navigate('CallLogs', { initialTab: 'TODAY', filterTitle: "Today's Calls" })}
               activeOpacity={0.7}
             >
               <IconTile icon="call" variant="blue" size={38} iconSize={18} />
@@ -209,7 +210,7 @@ export const HomeScreen: React.FC = () => {
 
             <TouchableOpacity
               style={styles.statTile}
-              onPress={() => (navigation as any).navigate('Dial')}
+              onPress={() => navigation.navigate('CallLogs', { initialTab: 'CONNECTED', status: 'CONNECTED', filterTitle: 'Connected Calls' })}
               activeOpacity={0.7}
             >
               <IconTile icon="link-outline" variant="green" size={38} iconSize={18} />
@@ -233,7 +234,7 @@ export const HomeScreen: React.FC = () => {
               activeOpacity={0.7}
             >
               <IconTile icon="people" variant="purple" size={38} iconSize={18} />
-              <Text style={styles.statTileNum}>{dashboard?.myAssignedLeads || 1}</Text>
+              <Text style={styles.statTileNum}>{dashboard?.myAssignedLeads || 0}</Text>
               <Text style={styles.statTileLabel} numberOfLines={1}>My Leads</Text>
             </TouchableOpacity>
           </View>
@@ -265,15 +266,15 @@ export const HomeScreen: React.FC = () => {
             </View>
           </Card>
 
-          {/* Section: 2 Compact Revenue & Sales Closed Cards */}
+          {/* Section: 2 Compact Revenue & Sales Closed Cards (Equal 50/50 Balanced Grid) */}
           <View style={styles.compactRow}>
             <Card style={styles.compactCard}>
               <View style={styles.compactHeader}>
                 <IconTile icon="trending-up" variant="green" size={32} iconSize={16} />
                 <StatusBadge label="Revenue" variant="success" showDot={false} />
               </View>
-              <Text style={styles.compactNum}>₹{revenueToUse.toLocaleString()}</Text>
-              <Text style={styles.compactLabel}>Month Revenue</Text>
+              <Text style={styles.compactNum} numberOfLines={1}>₹{revenueToUse.toLocaleString()}</Text>
+              <Text style={styles.compactLabel} numberOfLines={1}>Monthly Revenue</Text>
             </Card>
 
             <Card style={styles.compactCard} onPress={() => navigation.navigate('Sales')}>
@@ -281,8 +282,8 @@ export const HomeScreen: React.FC = () => {
                 <IconTile icon="cart" variant="purple" size={32} iconSize={16} />
                 <StatusBadge label="Done" variant="primary" showDot={false} />
               </View>
-              <Text style={styles.compactNum}>{dashboard?.myConversions || thisMonthSales.length}</Text>
-              <Text style={styles.compactLabel}>Sales Closed</Text>
+              <Text style={styles.compactNum} numberOfLines={1}>{dashboard?.myConversions || thisMonthSales.length}</Text>
+              <Text style={styles.compactLabel} numberOfLines={1}>Sales Closed</Text>
             </Card>
           </View>
 
@@ -440,14 +441,16 @@ const styles = StyleSheet.create({
   },
   compactRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: 12,
     marginBottom: spacing.normal,
   },
   compactCard: {
     flex: 1,
+    minWidth: 0,
     padding: spacing.md,
     borderRadius: 18,
     marginBottom: 0,
+    justifyContent: 'space-between',
   },
   compactHeader: {
     flexDirection: 'row',

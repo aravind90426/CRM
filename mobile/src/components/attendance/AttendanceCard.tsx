@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../common/Card';
 import { StatusBadge } from '../common/StatusBadge';
@@ -27,15 +28,7 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
   const [loadingAction, setLoadingAction] = useState<'clockIn' | 'clockOut' | null>(null);
   const [liveDuration, setLiveDuration] = useState<string>('0h 0m');
 
-  useEffect(() => {
-    if (initialAttendance) {
-      setAttendance(initialAttendance);
-    } else if (isAuthenticated && token && !authLoading) {
-      fetchToday();
-    }
-  }, [initialAttendance, isAuthenticated, token, authLoading]);
-
-  const fetchToday = async () => {
+  const fetchToday = useCallback(async () => {
     if (!isAuthenticated || !token || authLoading) return;
     try {
       const data = await attendanceApi.getTodayAttendance();
@@ -44,9 +37,52 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
     } catch (e: any) {
       console.warn('Failed to load today attendance:', e?.message || e);
     }
+  }, [isAuthenticated, token, authLoading, onAttendanceUpdated]);
+
+  useEffect(() => {
+    if (initialAttendance) {
+      setAttendance(initialAttendance);
+    } else {
+      fetchToday();
+    }
+  }, [initialAttendance, fetchToday]);
+
+  // Refetch when screen comes into focus to ensure fresh day status
+  useFocusEffect(
+    useCallback(() => {
+      fetchToday();
+    }, [fetchToday])
+  );
+
+  // Parse time deterministically from ISO string (e.g. "2026-09-23T11:47:35")
+  // Prevents client timezone offsets from altering the recorded time
+  const formatAttendanceTime = (timeStr?: string) => {
+    if (!timeStr) return '--:--';
+    const timePart = timeStr.includes('T')
+      ? timeStr.split('T')[1]
+      : timeStr.includes(' ')
+      ? timeStr.split(' ')[1]
+      : timeStr;
+    const parts = timePart.split(':');
+    if (parts.length >= 2) {
+      let hours = parseInt(parts[0], 10);
+      const minutes = parts[1].slice(0, 2);
+      if (!isNaN(hours)) {
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours === 0 ? 12 : hours;
+        return `${hours}:${minutes} ${ampm}`;
+      }
+    }
+    try {
+      const d = new Date(timeStr);
+      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+    } catch {
+      return timeStr.slice(11, 16);
+    }
   };
 
-  // Live duration ticker if clocked in and not clocked out
+  // Live duration ticker if clocked in and not clocked out; or recorded duration if clocked out
   useEffect(() => {
     if (attendance?.clockInTime && !attendance?.clockOutTime) {
       const updateDuration = () => {
@@ -59,12 +95,21 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
       };
 
       updateDuration();
-      const interval = setInterval(updateDuration, 60000); // every minute
+      const interval = setInterval(updateDuration, 30000); // every 30 seconds
       return () => clearInterval(interval);
-    } else if (attendance?.durationMinutes != null && attendance?.durationMinutes > 0) {
-      const hours = Math.floor(attendance.durationMinutes / 60);
-      const mins = attendance.durationMinutes % 60;
-      setLiveDuration(`${hours}h ${mins}m`);
+    } else if (attendance?.clockInTime && attendance?.clockOutTime) {
+      if (attendance.durationMinutes != null && attendance.durationMinutes > 0) {
+        const hours = Math.floor(attendance.durationMinutes / 60);
+        const mins = attendance.durationMinutes % 60;
+        setLiveDuration(`${hours}h ${mins}m`);
+      } else {
+        const start = new Date(attendance.clockInTime).getTime();
+        const end = new Date(attendance.clockOutTime).getTime();
+        const diffMinutes = Math.max(0, Math.floor((end - start) / (1000 * 60)));
+        const hours = Math.floor(diffMinutes / 60);
+        const mins = diffMinutes % 60;
+        setLiveDuration(`${hours}h ${mins}m`);
+      }
     } else {
       setLiveDuration('0h 0m');
     }
@@ -76,7 +121,8 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
       const updated = await attendanceApi.clockIn();
       setAttendance(updated);
       if (onAttendanceUpdated) onAttendanceUpdated(updated);
-      Alert.alert('Success', 'Clocked in successfully. Have a productive day!');
+      const timeFormatted = formatAttendanceTime(updated.clockInTime);
+      Alert.alert('Clocked In Successfully', `Punch recorded at ${timeFormatted}. Have a productive day!`);
     } catch (err: any) {
       Alert.alert('Clock In Failed', err.message || 'Unable to clock in.');
     } finally {
@@ -87,7 +133,7 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
   const handleClockOut = async () => {
     Alert.alert(
       'Confirm Clock Out',
-      'Are you sure you want to clock out for today?',
+      'Are you sure you want to clock out for today? You will not be able to clock in again today.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -99,7 +145,13 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
               const updated = await attendanceApi.clockOut();
               setAttendance(updated);
               if (onAttendanceUpdated) onAttendanceUpdated(updated);
-              Alert.alert('Success', `Clocked out successfully. Total working duration: ${liveDuration}`);
+              const timeFormatted = formatAttendanceTime(updated.clockOutTime);
+              const hours = Math.floor((updated.durationMinutes || 0) / 60);
+              const mins = (updated.durationMinutes || 0) % 60;
+              Alert.alert(
+                'Clocked Out Successfully',
+                `Punch recorded at ${timeFormatted}.\nTotal duration: ${hours}h ${mins}m`
+              );
             } catch (err: any) {
               Alert.alert('Clock Out Failed', err.message || 'Unable to clock out.');
             } finally {
@@ -109,16 +161,6 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
         },
       ]
     );
-  };
-
-  const formatTime = (timeStr?: string) => {
-    if (!timeStr) return '--:--';
-    try {
-      const date = new Date(timeStr);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return timeStr.slice(11, 16);
-    }
   };
 
   const isClockedIn = !!attendance?.clockInTime;
@@ -183,12 +225,12 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
       <View style={styles.metricsStrip}>
         <View style={styles.metricItem}>
           <Text style={styles.metricLabel}>Clock In</Text>
-          <Text style={styles.metricValue}>{formatTime(attendance?.clockInTime)}</Text>
+          <Text style={styles.metricValue}>{formatAttendanceTime(attendance?.clockInTime)}</Text>
         </View>
         <View style={styles.metricDivider} />
         <View style={styles.metricItem}>
           <Text style={styles.metricLabel}>Clock Out</Text>
-          <Text style={styles.metricValue}>{formatTime(attendance?.clockOutTime)}</Text>
+          <Text style={styles.metricValue}>{formatAttendanceTime(attendance?.clockOutTime)}</Text>
         </View>
         <View style={styles.metricDivider} />
         <View style={styles.metricItem}>
@@ -197,48 +239,89 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
         </View>
       </View>
 
-      {/* Bottom Buttons Row */}
+      {/* Bottom Buttons Row: 3 Strict Attendance States */}
       <View style={styles.actionRow}>
         <TouchableOpacity
           style={[
             styles.checkInBtn,
-            isClockedIn ? styles.checkInBtnActive : styles.checkInBtnNeutral,
+            isClockedOut
+              ? styles.btnLockedFaded
+              : isClockedIn
+              ? styles.checkInBtnClocked
+              : styles.checkInBtnReady,
           ]}
           onPress={handleClockIn}
-          disabled={isClockedIn || loadingAction !== null}
+          disabled={isClockedIn || isClockedOut || loadingAction !== null}
           activeOpacity={0.8}
         >
           <Ionicons
-            name={isClockedIn ? 'checkmark-circle-outline' : 'enter-outline'}
+            name={isClockedIn ? 'checkmark-circle' : 'enter-outline'}
             size={16}
-            color={isClockedIn ? colors.attendanceCheckInActiveText : colors.attendanceCheckInNeutralText}
+            color={
+              isClockedOut
+                ? 'rgba(255, 255, 255, 0.6)'
+                : isClockedIn
+                ? colors.attendanceCheckInActiveText
+                : '#1E40AF'
+            }
           />
           <Text
             style={[
               styles.btnText,
-              isClockedIn ? styles.checkInTextActive : styles.checkInTextNeutral,
+              isClockedOut
+                ? styles.btnTextLocked
+                : isClockedIn
+                ? styles.checkInTextActive
+                : styles.checkInTextReady,
             ]}
           >
-            {loadingAction === 'clockIn' ? 'Punching...' : isClockedIn ? 'Clocked In' : 'Clock In'}
+            {loadingAction === 'clockIn'
+              ? 'Clocking In...'
+              : isClockedIn
+              ? 'Clocked In'
+              : 'Clock In'}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[
             styles.checkOutBtn,
-            (!isClockedIn || isClockedOut) && styles.checkOutBtnDisabled,
+            isClockedOut
+              ? styles.btnLockedFaded
+              : isClockedIn
+              ? styles.checkOutBtnActiveReady
+              : styles.checkOutBtnDisabled,
           ]}
           onPress={handleClockOut}
           disabled={!isClockedIn || isClockedOut || loadingAction !== null}
           activeOpacity={0.8}
         >
           <Ionicons
-            name="exit-outline"
+            name={isClockedOut ? 'checkmark-circle' : 'exit-outline'}
             size={16}
-            color={colors.attendanceCheckOutText}
+            color={
+              isClockedOut
+                ? 'rgba(255, 255, 255, 0.6)'
+                : isClockedIn
+                ? '#FFFFFF'
+                : 'rgba(255, 255, 255, 0.5)'
+            }
           />
-          <Text style={[styles.btnText, styles.checkOutText]}>
-            {loadingAction === 'clockOut' ? 'Processing...' : isClockedOut ? 'Clocked Out' : 'Clock Out'}
+          <Text
+            style={[
+              styles.btnText,
+              isClockedOut
+                ? styles.btnTextLocked
+                : isClockedIn
+                ? styles.checkOutTextActive
+                : styles.checkOutTextDisabled,
+            ]}
+          >
+            {loadingAction === 'clockOut'
+              ? 'Clocking Out...'
+              : isClockedOut
+              ? 'Clocked Out'
+              : 'Clock Out'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -375,14 +458,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  checkInBtnNeutral: {
-    backgroundColor: colors.attendanceCheckInNeutralBg,
-    borderColor: colors.attendanceCheckInNeutralBorder,
-  },
-  checkInBtnActive: {
-    backgroundColor: colors.attendanceCheckInActiveBg,
-    borderColor: colors.attendanceCheckInActiveBorder,
-  },
   checkOutBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -392,23 +467,59 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 12,
     borderWidth: 1,
-    backgroundColor: colors.attendanceCheckOutBg,
-    borderColor: colors.attendanceCheckOutBorder,
   },
-  checkOutBtnDisabled: {
-    opacity: 0.5,
+  btnLockedFaded: {
+    opacity: 0.45,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
-  btnText: {
-    fontSize: 13,
-    fontWeight: '700',
+  btnTextLocked: {
+    color: 'rgba(255, 255, 255, 0.7)',
   },
-  checkInTextNeutral: {
-    color: colors.attendanceCheckInNeutralText,
+  checkInBtnReady: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+  },
+  checkInBtnClocked: {
+    opacity: 0.6,
+    backgroundColor: colors.attendanceCheckInActiveBg,
+    borderColor: colors.attendanceCheckInActiveBorder,
+  },
+  checkInTextReady: {
+    color: '#1E40AF',
+    fontWeight: '800',
   },
   checkInTextActive: {
     color: colors.attendanceCheckInActiveText,
   },
-  checkOutText: {
-    color: colors.attendanceCheckOutText,
+  checkOutBtnActiveReady: {
+    backgroundColor: '#DC2626',
+    borderColor: '#EF4444',
+    elevation: 3,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  checkOutBtnDisabled: {
+    opacity: 0.4,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  checkOutTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  checkOutTextDisabled: {
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  btnText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

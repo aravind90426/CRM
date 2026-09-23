@@ -4,14 +4,16 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   RefreshControl,
   Modal,
   Alert,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
@@ -21,6 +23,7 @@ import { GradientView } from '../../components/common/GradientView';
 import { Card } from '../../components/common/Card';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
+import { FormModal } from '../../components/common/FormModal';
 import { LoadingState } from '../../components/common/LoadingState';
 import { EmptyState } from '../../components/common/EmptyState';
 import { usersApi } from '../../api/usersApi';
@@ -28,6 +31,8 @@ import { User } from '../../types';
 
 export const AdminUsersScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
+  const { height: screenHeight } = useWindowDimensions();
 
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,7 +190,11 @@ export const AdminUsersScreen: React.FC = () => {
 
     return (
       <Card style={styles.userCard}>
-        <View style={styles.userCardTop}>
+        <TouchableOpacity
+          style={styles.userCardTop}
+          onPress={() => navigation.navigate('AttendanceHistory', { userId: item.id, userName: item.name })}
+          activeOpacity={0.7}
+        >
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
           </View>
@@ -221,7 +230,8 @@ export const AdminUsersScreen: React.FC = () => {
               </Text>
             ) : null}
           </View>
-        </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ alignSelf: 'center', marginLeft: 4 }} />
+        </TouchableOpacity>
 
         <View style={styles.userCardFooter}>
           <TouchableOpacity
@@ -248,6 +258,15 @@ export const AdminUsersScreen: React.FC = () => {
           </TouchableOpacity>
 
           <View style={styles.userActionBtns}>
+            <TouchableOpacity
+              style={styles.attendanceBtn}
+              onPress={() => navigation.navigate('AttendanceHistory', { userId: item.id, userName: item.name })}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar-outline" size={13} color={colors.primary} />
+              <Text style={styles.attendanceBtnText}>Attendance</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.editBtn}
               onPress={() => handleOpenEdit(item)}
@@ -364,211 +383,173 @@ export const AdminUsersScreen: React.FC = () => {
       )}
 
       {/* Add User Modal */}
-      <Modal visible={createModalVisible} transparent animationType="fade">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New User</Text>
-              <TouchableOpacity onPress={() => setCreateModalVisible(false)}>
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+      <FormModal
+        visible={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        title="Add New User"
+        onSave={handleCreateUser}
+        saveTitle="Save"
+        saveLoading={submitting}
+        saveVariant="primary"
+        heightPercent={0.82}
+        maxHeightPixels={580}
+      >
+        <Input
+          label="Full Name *"
+          placeholder="e.g. Rahul Sharma"
+          value={newName}
+          onChangeText={setNewName}
+        />
 
-            <Input
-              label="Full Name *"
-              placeholder="e.g. Rahul Sharma"
-              value={newName}
-              onChangeText={setNewName}
-            />
+        <Input
+          label="Email Address *"
+          placeholder="rahul@crm.com"
+          value={newEmail}
+          onChangeText={setNewEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
 
-            <Input
-              label="Email Address *"
-              placeholder="rahul@crm.com"
-              value={newEmail}
-              onChangeText={setNewEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
+        <Input
+          label="Phone Number"
+          placeholder="+91 98765 43210"
+          value={newPhone}
+          onChangeText={setNewPhone}
+          keyboardType="phone-pad"
+        />
 
-            <Input
-              label="Phone Number"
-              placeholder="+91 98765 43210"
-              value={newPhone}
-              onChangeText={setNewPhone}
-              keyboardType="phone-pad"
-            />
+        <Input
+          label="Initial Password *"
+          placeholder="At least 6 characters"
+          value={newPassword}
+          onChangeText={setNewPassword}
+          isPassword
+        />
 
-            <Input
-              label="Initial Password *"
-              placeholder="At least 6 characters"
-              value={newPassword}
-              onChangeText={setNewPassword}
-              isPassword
-            />
-
-            <View style={styles.rolePickerContainer}>
-              <Text style={styles.fieldLabel}>Role *</Text>
-              <View style={styles.rolePickerRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.roleOption,
-                    newRole === 'ROLE_USER' && styles.roleOptionActive,
-                  ]}
-                  onPress={() => setNewRole('ROLE_USER')}
-                >
-                  <Ionicons
-                    name="person"
-                    size={14}
-                    color={newRole === 'ROLE_USER' ? colors.primary : colors.textMuted}
-                  />
-                  <Text
-                    style={[
-                      styles.roleOptionText,
-                      newRole === 'ROLE_USER' && styles.roleOptionTextActive,
-                    ]}
-                  >
-                    User (Sales Agent)
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.roleOption,
-                    newRole === 'ROLE_ADMIN' && styles.roleOptionActive,
-                  ]}
-                  onPress={() => setNewRole('ROLE_ADMIN')}
-                >
-                  <Ionicons
-                    name="shield-checkmark"
-                    size={14}
-                    color={newRole === 'ROLE_ADMIN' ? colors.primary : colors.textMuted}
-                  />
-                  <Text
-                    style={[
-                      styles.roleOptionText,
-                      newRole === 'ROLE_ADMIN' && styles.roleOptionTextActive,
-                    ]}
-                  >
-                    Admin
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.modalActions}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                onPress={() => setCreateModalVisible(false)}
-                style={styles.modalActionBtn}
+        <View style={styles.rolePickerContainer}>
+          <Text style={styles.fieldLabel}>Role *</Text>
+          <View style={styles.rolePickerRow}>
+            <TouchableOpacity
+              style={[
+                styles.roleOption,
+                newRole === 'ROLE_USER' && styles.roleOptionActive,
+              ]}
+              onPress={() => setNewRole('ROLE_USER')}
+            >
+              <Ionicons
+                name="person"
+                size={14}
+                color={newRole === 'ROLE_USER' ? colors.primary : colors.textMuted}
               />
-              <Button
-                title="Create User"
-                onPress={handleCreateUser}
-                loading={submitting}
-                style={styles.modalActionBtn}
+              <Text
+                style={[
+                  styles.roleOptionText,
+                  newRole === 'ROLE_USER' && styles.roleOptionTextActive,
+                ]}
+              >
+                User (Sales Agent)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.roleOption,
+                newRole === 'ROLE_ADMIN' && styles.roleOptionActive,
+              ]}
+              onPress={() => setNewRole('ROLE_ADMIN')}
+            >
+              <Ionicons
+                name="shield-checkmark"
+                size={14}
+                color={newRole === 'ROLE_ADMIN' ? colors.primary : colors.textMuted}
               />
-            </View>
+              <Text
+                style={[
+                  styles.roleOptionText,
+                  newRole === 'ROLE_ADMIN' && styles.roleOptionTextActive,
+                ]}
+              >
+                Admin
+              </Text>
+            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        </View>
+      </FormModal>
 
       {/* Edit User Modal */}
-      <Modal visible={editModalVisible} transparent animationType="fade">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit User Profile</Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+      <FormModal
+        visible={editModalVisible}
+        onClose={() => setEditModalVisible(false)}
+        title="Edit User Profile"
+        onSave={handleUpdateUser}
+        saveTitle="Save"
+        saveLoading={submitting}
+        saveVariant="primary"
+        heightPercent={0.82}
+        maxHeightPixels={580}
+      >
+        <Input
+          label="Full Name *"
+          value={editName}
+          onChangeText={setEditName}
+        />
 
-            <Input
-              label="Full Name *"
-              value={editName}
-              onChangeText={setEditName}
-            />
+        <Input
+          label="Phone Number"
+          value={editPhone}
+          onChangeText={setEditPhone}
+          keyboardType="phone-pad"
+        />
 
-            <Input
-              label="Phone Number"
-              value={editPhone}
-              onChangeText={setEditPhone}
-              keyboardType="phone-pad"
-            />
-
-            <View style={styles.rolePickerContainer}>
-              <Text style={styles.fieldLabel}>Role *</Text>
-              <View style={styles.rolePickerRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.roleOption,
-                    editRole === 'ROLE_USER' && styles.roleOptionActive,
-                  ]}
-                  onPress={() => setEditRole('ROLE_USER')}
-                >
-                  <Ionicons
-                    name="person"
-                    size={14}
-                    color={editRole === 'ROLE_USER' ? colors.primary : colors.textMuted}
-                  />
-                  <Text
-                    style={[
-                      styles.roleOptionText,
-                      editRole === 'ROLE_USER' && styles.roleOptionTextActive,
-                    ]}
-                  >
-                    User
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.roleOption,
-                    editRole === 'ROLE_ADMIN' && styles.roleOptionActive,
-                  ]}
-                  onPress={() => setEditRole('ROLE_ADMIN')}
-                >
-                  <Ionicons
-                    name="shield-checkmark"
-                    size={14}
-                    color={editRole === 'ROLE_ADMIN' ? colors.primary : colors.textMuted}
-                  />
-                  <Text
-                    style={[
-                      styles.roleOptionText,
-                      editRole === 'ROLE_ADMIN' && styles.roleOptionTextActive,
-                    ]}
-                  >
-                    Admin
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.modalActions}>
-              <Button
-                title="Cancel"
-                variant="outline"
-                onPress={() => setEditModalVisible(false)}
-                style={styles.modalActionBtn}
+        <View style={styles.rolePickerContainer}>
+          <Text style={styles.fieldLabel}>Role *</Text>
+          <View style={styles.rolePickerRow}>
+            <TouchableOpacity
+              style={[
+                styles.roleOption,
+                editRole === 'ROLE_USER' && styles.roleOptionActive,
+              ]}
+              onPress={() => setEditRole('ROLE_USER')}
+            >
+              <Ionicons
+                name="person"
+                size={14}
+                color={editRole === 'ROLE_USER' ? colors.primary : colors.textMuted}
               />
-              <Button
-                title="Save Changes"
-                onPress={handleUpdateUser}
-                loading={submitting}
-                style={styles.modalActionBtn}
+              <Text
+                style={[
+                  styles.roleOptionText,
+                  editRole === 'ROLE_USER' && styles.roleOptionTextActive,
+                ]}
+              >
+                User
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.roleOption,
+                editRole === 'ROLE_ADMIN' && styles.roleOptionActive,
+              ]}
+              onPress={() => setEditRole('ROLE_ADMIN')}
+            >
+              <Ionicons
+                name="shield-checkmark"
+                size={14}
+                color={editRole === 'ROLE_ADMIN' ? colors.primary : colors.textMuted}
               />
-            </View>
+              <Text
+                style={[
+                  styles.roleOptionText,
+                  editRole === 'ROLE_ADMIN' && styles.roleOptionTextActive,
+                ]}
+              >
+                Admin
+              </Text>
+            </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        </View>
+      </FormModal>
     </SafeAreaView>
   );
 };
@@ -724,6 +705,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs + 2,
   },
+  attendanceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  attendanceBtnText: {
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: '600',
+  },
   editBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -764,6 +759,18 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    maxHeight: '90%',
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  modalScrollBody: {
+    width: '100%',
+  },
+  modalScrollContent: {
+    paddingBottom: spacing.sm,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -817,7 +824,11 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    flexShrink: 0,
   },
   modalActionBtn: {
     flex: 1,

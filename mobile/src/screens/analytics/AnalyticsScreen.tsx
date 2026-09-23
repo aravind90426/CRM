@@ -7,8 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Modal,
-  FlatList,
-  Linking,
+  TextInput,
   Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,26 +15,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
-import { Card } from '../../components/common/Card';
-import { StatusBadge } from '../../components/common/StatusBadge';
 import { LoadingState } from '../../components/common/LoadingState';
 import { ErrorState } from '../../components/common/ErrorState';
-import { EmptyState } from '../../components/common/EmptyState';
 import { GradientView } from '../../components/common/GradientView';
 import { MeqHeader } from '../../components/common/MeqHeader';
 import { callApi } from '../../api/callApi';
-import { Call, CallAnalytics } from '../../types';
+import { CallAnalytics } from '../../types';
 
-type DateFilterOption = 'TODAY' | 'YESTERDAY' | 'WEEK' | 'MONTH' | 'CUSTOM';
-
-type MetricFilterType =
-  | 'TOTAL'
-  | 'UNIQUE'
-  | 'NOT_ATTENDED'
-  | 'FRESH'
-  | 'PROSPECT'
-  | 'JUNK'
-  | 'ACCEPTABLE';
+type DateFilterOption = 'TODAY' | 'WEEK' | 'MONTH' | 'CUSTOM';
 
 export const AnalyticsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -43,70 +30,76 @@ export const AnalyticsScreen: React.FC = () => {
 
   const [selectedRange, setSelectedRange] = useState<DateFilterOption>('WEEK');
   const [analytics, setAnalytics] = useState<CallAnalytics | null>(null);
-  const [callsList, setCallsList] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Detail Modal State
-  const [detailModalVisible, setDetailModalVisible] = useState(false);
-  const [selectedMetric, setSelectedMetric] = useState<MetricFilterType | null>(null);
-  const [modalTitle, setModalTitle] = useState('');
+  // Custom Date Range Modal State
+  const [customModalVisible, setCustomModalVisible] = useState(false);
+  const [customFromDate, setCustomFromDate] = useState('');
+  const [customToDate, setCustomToDate] = useState('');
+  const [activeCustomRange, setActiveCustomRange] = useState<{ start: string; end: string } | null>(null);
 
-  const getDateRangeParams = useCallback((range: DateFilterOption) => {
-    const now = new Date();
-    const start = new Date();
-    const end = new Date();
+  const pad = (n: number) => n.toString().padStart(2, '0');
 
-    if (range === 'TODAY') {
-      start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
-    } else if (range === 'YESTERDAY') {
-      start.setDate(start.getDate() - 1);
-      start.setHours(0, 0, 0, 0);
-      end.setDate(end.getDate() - 1);
-      end.setHours(23, 59, 59, 999);
-    } else if (range === 'WEEK') {
-      start.setDate(start.getDate() - 7);
-      start.setHours(0, 0, 0, 0);
-    } else if (range === 'MONTH') {
-      start.setDate(1);
-      start.setHours(0, 0, 0, 0);
-    } else if (range === 'CUSTOM') {
-      start.setDate(start.getDate() - 30);
-      start.setHours(0, 0, 0, 0);
-    }
+  const getDateRangeParams = useCallback(
+    (range: DateFilterOption) => {
+      const now = new Date();
+      const pad2 = (n: number) => n.toString().padStart(2, '0');
 
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    const formatHeaderDate = (d: Date) =>
-      d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+      let start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      let end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
 
-    return {
-      startDate: start.toISOString().slice(0, 19),
-      endDate: end.toISOString().slice(0, 19),
-      headerTitle: formatHeaderDate(now),
-      headerTime: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
-    };
-  }, []);
+      if (range === 'TODAY') {
+        // start and end already set to today
+      } else if (range === 'WEEK') {
+        // Monday of current week
+        const day = now.getDay();
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is Sunday
+        start = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0);
+      } else if (range === 'MONTH') {
+        // First day of current month
+        start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+      } else if (range === 'CUSTOM' && activeCustomRange) {
+        return {
+          startDate: activeCustomRange.start,
+          endDate: activeCustomRange.end,
+          headerTitle: `${activeCustomRange.start.slice(0, 10)} to ${activeCustomRange.end.slice(0, 10)}`,
+        };
+      }
 
-  const loadData = useCallback(async (isRefresh = false) => {
-    if (!isRefresh) setLoading(true);
-    setError(null);
-    try {
-      const { startDate, endDate } = getDateRangeParams(selectedRange);
-      const [analyticsData, callsPage] = await Promise.all([
-        callApi.getCallAnalytics(startDate, endDate),
-        callApi.getCalls({ startDate, endDate, size: 100 }).catch(() => ({ content: [] })),
-      ]);
-      setAnalytics(analyticsData);
-      setCallsList(callsPage.content || []);
-    } catch (err: any) {
-      setError(err.message || 'Unable to load analytics.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [getDateRangeParams, selectedRange]);
+      const formatIso = (d: Date) =>
+        `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+
+      const formatHeaderDate = (d: Date) =>
+        d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+      return {
+        startDate: formatIso(start),
+        endDate: formatIso(end),
+        headerTitle: formatHeaderDate(now),
+      };
+    },
+    [activeCustomRange]
+  );
+
+  const loadData = useCallback(
+    async (isRefresh = false) => {
+      if (!isRefresh) setLoading(true);
+      setError(null);
+      try {
+        const { startDate, endDate } = getDateRangeParams(selectedRange);
+        const data = await callApi.getCallAnalytics(startDate, endDate);
+        setAnalytics(data);
+      } catch (err: any) {
+        setError(err.message || 'Unable to load analytics.');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [getDateRangeParams, selectedRange]
+  );
 
   useEffect(() => {
     loadData();
@@ -117,52 +110,34 @@ export const AnalyticsScreen: React.FC = () => {
     loadData(true);
   };
 
-  const handleOpenMetricDetail = (type: MetricFilterType, title: string) => {
-    setSelectedMetric(type);
-    setModalTitle(title);
-    setDetailModalVisible(true);
+  const handleApplyCustomDate = () => {
+    if (!customFromDate.trim() || !customToDate.trim()) {
+      return;
+    }
+    const startIso = `${customFromDate.trim()}T00:00:00`;
+    const endIso = `${customToDate.trim()}T23:59:59`;
+    setActiveCustomRange({ start: startIso, end: endIso });
+    setSelectedRange('CUSTOM');
+    setCustomModalVisible(false);
   };
 
-  const getFilteredCallsForMetric = (type: MetricFilterType | null): Call[] => {
-    if (!type) return [];
-    switch (type) {
-      case 'TOTAL':
-        return callsList;
-      case 'UNIQUE':
-        return callsList.filter((c) => c.durationSeconds && c.durationSeconds >= 1);
-      case 'NOT_ATTENDED':
-        return callsList.filter(
-          (c) =>
-            c.callStatus === 'NOT_ATTENDED' ||
-            c.callStatus === 'MISSED' ||
-            c.callStatus === 'NO_ANSWER' ||
-            c.durationSeconds === 0
-        );
-      case 'FRESH':
-        return callsList.filter((c) => !c.leadId || c.callStatus === 'NEW');
-      case 'PROSPECT':
-        return callsList.filter(
-          (c) => c.durationSeconds && c.durationSeconds >= 300
-        );
-      case 'JUNK':
-        return callsList.filter(
-          (c) =>
-            c.callStatus === 'CONNECTED' &&
-            c.durationSeconds &&
-            c.durationSeconds > 0 &&
-            c.durationSeconds < 30
-        );
-      case 'ACCEPTABLE':
-        return callsList.filter(
-          (c) =>
-            c.callStatus === 'CONNECTED' &&
-            c.durationSeconds &&
-            c.durationSeconds >= 60 &&
-            c.durationSeconds < 300
-        );
-      default:
-        return callsList;
-    }
+  const handleResetCustomDate = () => {
+    setActiveCustomRange(null);
+    setCustomFromDate('');
+    setCustomToDate('');
+    setSelectedRange('WEEK');
+    setCustomModalVisible(false);
+  };
+
+  const handleOpenCustomPicker = () => {
+    const now = new Date();
+    const pad2 = (n: number) => n.toString().padStart(2, '0');
+    const todayStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+    const pastStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-01`;
+
+    if (!customFromDate) setCustomFromDate(pastStr);
+    if (!customToDate) setCustomToDate(todayStr);
+    setCustomModalVisible(true);
   };
 
   const formatSeconds = (sec?: number) => {
@@ -175,16 +150,26 @@ export const AnalyticsScreen: React.FC = () => {
     return `${remainder}s`;
   };
 
-  const formatHeaderTime = getDateRangeParams(selectedRange);
-  const modalCalls = getFilteredCallsForMetric(selectedMetric);
+  const { startDate, endDate, headerTitle } = getDateRangeParams(selectedRange);
+
+  // Navigate directly to CallLogs with applied filter and dates
+  const handleCardClick = (params: {
+    status?: string;
+    callDirection?: string;
+    minDuration?: number;
+    maxDuration?: number;
+    filterTitle: string;
+  }) => {
+    navigation.navigate('CallLogs', {
+      startDate,
+      endDate,
+      ...params,
+    });
+  };
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.container}>
-      {/* MEQ CRM Top Header with Calendar Date Pill */}
-      <MeqHeader
-        rightMode="date"
-        dateText={formatHeaderTime.headerTitle}
-      />
+      <MeqHeader rightMode="date" dateText={headerTitle} />
 
       {/* Date Filter Tabs Bar */}
       <View style={styles.filterPillsRow}>
@@ -193,22 +178,21 @@ export const AnalyticsScreen: React.FC = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterPillsScroll}
         >
-          {(['TODAY', 'YESTERDAY', 'WEEK', 'MONTH', 'CUSTOM'] as DateFilterOption[]).map((tab) => {
+          {(['TODAY', 'WEEK', 'MONTH'] as DateFilterOption[]).map((tab) => {
             const label =
               tab === 'TODAY'
                 ? 'Today'
-                : tab === 'YESTERDAY'
-                ? 'Yesterday'
                 : tab === 'WEEK'
                 ? 'This Week'
-                : tab === 'MONTH'
-                ? 'This Month'
-                : 'Custom';
+                : 'This Month';
             const isActive = selectedRange === tab;
             return (
               <TouchableOpacity
                 key={tab}
-                onPress={() => setSelectedRange(tab)}
+                onPress={() => {
+                  setSelectedRange(tab);
+                  setActiveCustomRange(null);
+                }}
                 activeOpacity={0.7}
               >
                 {isActive ? (
@@ -228,6 +212,31 @@ export const AnalyticsScreen: React.FC = () => {
               </TouchableOpacity>
             );
           })}
+
+          {/* Custom Date Pill */}
+          <TouchableOpacity
+            onPress={handleOpenCustomPicker}
+            activeOpacity={0.7}
+          >
+            {selectedRange === 'CUSTOM' ? (
+              <GradientView
+                colors={colors.primaryGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.filterPillActive}
+              >
+                <Ionicons name="calendar" size={13} color="#ffffff" style={{ marginRight: 4 }} />
+                <Text style={styles.filterPillTextActive}>
+                  {activeCustomRange ? 'Custom (Active)' : 'Custom Range'}
+                </Text>
+              </GradientView>
+            ) : (
+              <View style={[styles.filterPill, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                <Ionicons name="calendar-outline" size={13} color={colors.textSecondary} />
+                <Text style={styles.filterPillText}>Custom Range</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </ScrollView>
       </View>
 
@@ -244,285 +253,298 @@ export const AnalyticsScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
       >
         {loading && !refreshing ? (
-          <LoadingState message="Fetching real-time call analytics..." />
+          <LoadingState message="Fetching call analytics..." />
         ) : error ? (
           <ErrorState message={error} onRetry={() => loadData()} />
         ) : (
           <>
-            {/* Row 1: TOTAL CALLS & UNIQUE CALLS */}
+            {/* Row 1: TOTAL CALLS & CONNECTED CALLS */}
             <View style={styles.cardsRow}>
               <TouchableOpacity
                 style={[styles.statCard, styles.totalCard]}
                 activeOpacity={0.8}
-                onPress={() => handleOpenMetricDetail('TOTAL', 'Total Calls')}
+                onPress={() =>
+                  handleCardClick({
+                    filterTitle: 'Total Calls',
+                  })
+                }
               >
                 <View style={styles.statCardTop}>
                   <View style={[styles.iconCircle, { backgroundColor: '#DBEAFE' }]}>
                     <Ionicons name="call" size={17} color="#2563EB" />
                   </View>
+                  <Ionicons name="chevron-forward" size={16} color="#93C5FD" />
                 </View>
                 <Text style={[styles.statNumber, { color: '#1E3A8A' }]}>
                   {analytics?.totalCalls ?? 0}
                 </Text>
                 <Text style={styles.statTitle}>TOTAL CALLS</Text>
-                <Text style={styles.statSubtitle}>All activity</Text>
+                <Text style={styles.statSubtitle}>Tap to view all calls</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.statCard, styles.uniqueCard]}
                 activeOpacity={0.8}
-                onPress={() => handleOpenMetricDetail('UNIQUE', 'Unique Calls (> 1s)')}
+                onPress={() =>
+                  handleCardClick({
+                    status: 'CONNECTED',
+                    filterTitle: 'Connected Calls',
+                  })
+                }
               >
                 <View style={styles.statCardTop}>
                   <View style={[styles.iconCircle, { backgroundColor: '#EDE9FE' }]}>
-                    <Ionicons name="people" size={17} color="#7C3AED" />
+                    <Ionicons name="checkmark-circle" size={17} color="#7C3AED" />
                   </View>
+                  <Ionicons name="chevron-forward" size={16} color="#C4B5FD" />
                 </View>
                 <Text style={[styles.statNumber, { color: '#6D28D9' }]}>
-                  {analytics?.uniqueCalls ?? 0}
+                  {analytics?.connectedCalls ?? analytics?.acceptableCalls ?? 0}
                 </Text>
-                <Text style={styles.statTitle}>UNIQUE CALLS</Text>
-                <Text style={styles.statSubtitle}>Connected &gt; 1s</Text>
+                <Text style={styles.statTitle}>CONNECTED</Text>
+                <Text style={styles.statSubtitle}>Tap to view connected</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Row 2: NOT ATTENDED & FRESH CALLS */}
-            <View style={styles.cardsRow}>
-              <TouchableOpacity
-                style={[styles.statCard, styles.notAttendedCard]}
-                activeOpacity={0.8}
-                onPress={() => handleOpenMetricDetail('NOT_ATTENDED', 'Not Attended Calls')}
-              >
-                <View style={styles.statCardTop}>
-                  <View style={[styles.iconCircle, { backgroundColor: '#FEE2E2' }]}>
-                    <Ionicons name="close-circle" size={17} color="#DC2626" />
-                  </View>
-                </View>
-                <Text style={[styles.statNumber, { color: '#B91C1C' }]}>
-                  {analytics?.notAttendedCalls ?? 0}
-                </Text>
-                <Text style={styles.statTitle}>NOT ATTENDED</Text>
-                <Text style={styles.statSubtitle}>Missed / 0s</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.statCard, styles.freshCard]}
-                activeOpacity={0.8}
-                onPress={() => handleOpenMetricDetail('FRESH', 'Fresh Calls (New Numbers)')}
-              >
-                <View style={styles.statCardTop}>
-                  <View style={[styles.iconCircle, { backgroundColor: '#DCFCE7' }]}>
-                    <Ionicons name="sparkles" size={17} color="#16A34A" />
-                  </View>
-                </View>
-                <Text style={[styles.statNumber, { color: '#15803D' }]}>
-                  {analytics?.freshCalls ?? 0}
-                </Text>
-                <Text style={styles.statTitle}>FRESH CALLS</Text>
-                <Text style={styles.statSubtitle}>New numbers</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Row 3: PROSPECT CALLS & JUNK CALLS */}
+            {/* Row 2: PROSPECT & JUNK */}
             <View style={styles.cardsRow}>
               <TouchableOpacity
                 style={[styles.statCard, styles.prospectCard]}
                 activeOpacity={0.8}
-                onPress={() => handleOpenMetricDetail('PROSPECT', 'Prospect Calls (> 5 mins)')}
+                onPress={() =>
+                  handleCardClick({
+                    status: 'PROSPECT',
+                    minDuration: 301,
+                    filterTitle: 'Prospect Calls (> 5m)',
+                  })
+                }
               >
                 <View style={styles.statCardTop}>
                   <View style={[styles.iconCircle, { backgroundColor: '#CCFBF1' }]}>
                     <Ionicons name="trending-up" size={17} color="#0D9488" />
                   </View>
+                  <Ionicons name="chevron-forward" size={16} color="#99F6E4" />
                 </View>
                 <Text style={[styles.statNumber, { color: '#0F766E' }]}>
                   {analytics?.prospectCalls ?? 0}
                 </Text>
-                <Text style={styles.statTitle}>PROSPECT CALLS</Text>
+                <Text style={styles.statTitle}>PROSPECT</Text>
                 <Text style={styles.statSubtitle}>&gt; 5 mins duration</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.statCard, styles.junkCard]}
                 activeOpacity={0.8}
-                onPress={() => handleOpenMetricDetail('JUNK', 'Junk Calls (< 30s)')}
+                onPress={() =>
+                  handleCardClick({
+                    status: 'JUNK',
+                    maxDuration: 20,
+                    filterTitle: 'Junk Calls (< 20s)',
+                  })
+                }
               >
                 <View style={styles.statCardTop}>
                   <View style={[styles.iconCircle, { backgroundColor: '#FFEDD5' }]}>
                     <Ionicons name="warning" size={17} color="#EA580C" />
                   </View>
+                  <Ionicons name="chevron-forward" size={16} color="#FDBA74" />
                 </View>
                 <Text style={[styles.statNumber, { color: '#C2410C' }]}>
                   {analytics?.junkCalls ?? 0}
                 </Text>
-                <Text style={styles.statTitle}>JUNK CALLS</Text>
-                <Text style={styles.statSubtitle}>&lt; 30 secs duration</Text>
+                <Text style={styles.statTitle}>JUNK</Text>
+                <Text style={styles.statSubtitle}>&lt; 20s duration</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Row 4: ACCEPTABLE CALLS (Full Width Tinted Card) */}
-            <TouchableOpacity
-              style={styles.acceptableCard}
-              activeOpacity={0.8}
-              onPress={() => handleOpenMetricDetail('ACCEPTABLE', 'Acceptable Calls (> 60s)')}
-            >
-              <View style={styles.acceptableHeader}>
-                <View style={styles.acceptableLeft}>
-                  <View style={[styles.iconCircle, { backgroundColor: '#EDE9FE' }]}>
-                    <Ionicons name="checkmark-circle" size={18} color="#7C3AED" />
+            {/* Row 3: NOT ATTENDED & MISSED */}
+            <View style={styles.cardsRow}>
+              <TouchableOpacity
+                style={[styles.statCard, styles.notAttendedCard]}
+                activeOpacity={0.8}
+                onPress={() =>
+                  handleCardClick({
+                    status: 'NOT_ATTENDED',
+                    filterTitle: 'Not Attended Calls',
+                  })
+                }
+              >
+                <View style={styles.statCardTop}>
+                  <View style={[styles.iconCircle, { backgroundColor: '#FEE2E2' }]}>
+                    <Ionicons name="close-circle" size={17} color="#DC2626" />
                   </View>
-                  <View>
-                    <Text style={styles.statTitle}>ACCEPTABLE CALLS</Text>
-                    <Text style={styles.statSubtitle}>&gt; 60 secs • Qualified discussions</Text>
-                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#FCA5A5" />
                 </View>
-                <Text style={styles.acceptableNumber}>
-                  {analytics?.acceptableCalls ?? 0}
+                <Text style={[styles.statNumber, { color: '#B91C1C' }]}>
+                  {analytics?.notAttendedCalls ?? 0}
                 </Text>
+                <Text style={styles.statTitle}>NOT ATTENDED</Text>
+                <Text style={styles.statSubtitle}>Unanswered / 0s</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.statCard, styles.missedCard]}
+                activeOpacity={0.8}
+                onPress={() =>
+                  handleCardClick({
+                    status: 'MISSED',
+                    filterTitle: 'Missed Calls',
+                  })
+                }
+              >
+                <View style={styles.statCardTop}>
+                  <View style={[styles.iconCircle, { backgroundColor: '#FEF3C7' }]}>
+                    <Ionicons name="call-outline" size={17} color="#D97706" />
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#FCD34D" />
+                </View>
+                <Text style={[styles.statNumber, { color: '#B45309' }]}>
+                  {analytics?.missedCalls ?? 0}
+                </Text>
+                <Text style={styles.statTitle}>MISSED</Text>
+                <Text style={styles.statSubtitle}>Missed calls</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Row 4: OUTBOUND & INBOUND */}
+            <View style={styles.cardsRow}>
+              <TouchableOpacity
+                style={[styles.statCard, styles.outboundCard]}
+                activeOpacity={0.8}
+                onPress={() =>
+                  handleCardClick({
+                    callDirection: 'OUTBOUND',
+                    filterTitle: 'Outbound Calls',
+                  })
+                }
+              >
+                <View style={styles.statCardTop}>
+                  <View style={[styles.iconCircle, { backgroundColor: '#E0E7FF' }]}>
+                    <Ionicons name="arrow-up-circle" size={17} color="#4F46E5" />
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#A5B4FC" />
+                </View>
+                <Text style={[styles.statNumber, { color: '#3730A3' }]}>
+                  {analytics?.outboundCalls ?? 0}
+                </Text>
+                <Text style={styles.statTitle}>OUTBOUND</Text>
+                <Text style={styles.statSubtitle}>Outgoing calls</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.statCard, styles.inboundCard]}
+                activeOpacity={0.8}
+                onPress={() =>
+                  handleCardClick({
+                    callDirection: 'INBOUND',
+                    filterTitle: 'Inbound Calls',
+                  })
+                }
+              >
+                <View style={styles.statCardTop}>
+                  <View style={[styles.iconCircle, { backgroundColor: '#DCFCE7' }]}>
+                    <Ionicons name="arrow-down-circle" size={17} color="#16A34A" />
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#86EFAC" />
+                </View>
+                <Text style={[styles.statNumber, { color: '#15803D' }]}>
+                  {analytics?.inboundCalls ?? 0}
+                </Text>
+                <Text style={styles.statTitle}>INBOUND</Text>
+                <Text style={styles.statSubtitle}>Incoming calls</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Row 5: TALK TIME & AVG DURATION */}
+            <View style={styles.cardsRow}>
+              <View style={[styles.statCard, styles.talkTimeCard]}>
+                <View style={styles.statCardTop}>
+                  <View style={[styles.iconCircle, { backgroundColor: '#F3E8FF' }]}>
+                    <Ionicons name="time" size={17} color="#9333EA" />
+                  </View>
+                </View>
+                <Text style={[styles.statNumber, { color: '#6B21A8' }]}>
+                  {formatSeconds(analytics?.totalTalkTimeSeconds)}
+                </Text>
+                <Text style={styles.statTitle}>TOTAL TALK TIME</Text>
+                <Text style={styles.statSubtitle}>Cumulative duration</Text>
               </View>
-            </TouchableOpacity>
 
-            {/* Section: System Breakdown */}
-            <Text style={styles.sectionHeading}>System Breakdown</Text>
-
-            <View style={styles.breakdownCard}>
-              {/* Inbound Calls */}
-              <View style={styles.breakdownRow}>
-                <View style={styles.breakdownLabelGroup}>
-                  <View style={[styles.breakdownDot, { backgroundColor: colors.success }]} />
-                  <Text style={styles.breakdownLabel}>Inbound Calls</Text>
+              <View style={[styles.statCard, styles.avgDurationCard]}>
+                <View style={styles.statCardTop}>
+                  <View style={[styles.iconCircle, { backgroundColor: '#F0FDF4' }]}>
+                    <Ionicons name="speedometer" size={17} color="#059669" />
+                  </View>
                 </View>
-                <Text style={styles.breakdownValue}>{analytics?.inboundCalls ?? 0}</Text>
-              </View>
-
-              {/* Outbound Calls */}
-              <View style={styles.breakdownRow}>
-                <View style={styles.breakdownLabelGroup}>
-                  <View style={[styles.breakdownDot, { backgroundColor: colors.info }]} />
-                  <Text style={styles.breakdownLabel}>Outbound Calls</Text>
-                </View>
-                <Text style={styles.breakdownValue}>{analytics?.outboundCalls ?? 0}</Text>
-              </View>
-
-              {/* Missed Calls */}
-              <View style={styles.breakdownRow}>
-                <View style={styles.breakdownLabelGroup}>
-                  <View style={[styles.breakdownDot, { backgroundColor: colors.danger }]} />
-                  <Text style={styles.breakdownLabel}>Missed Calls</Text>
-                </View>
-                <Text style={styles.breakdownValue}>{analytics?.missedCalls ?? 0}</Text>
-              </View>
-
-              <View style={styles.breakdownDivider} />
-
-              {/* Talk Time & Average Duration */}
-              <View style={styles.metricsGrid}>
-                <View style={styles.metricGridItem}>
-                  <Text style={styles.metricGridLabel}>Total Talk Time</Text>
-                  <Text style={styles.metricGridValue}>
-                    {formatSeconds(analytics?.totalTalkTimeSeconds)}
-                  </Text>
-                </View>
-
-                <View style={styles.metricGridItem}>
-                  <Text style={styles.metricGridLabel}>Avg Duration</Text>
-                  <Text style={styles.metricGridValue}>
-                    {formatSeconds(analytics?.averageDurationSeconds)}
-                  </Text>
-                </View>
-
-                <View style={styles.metricGridItem}>
-                  <Text style={styles.metricGridLabel}>Connected</Text>
-                  <Text style={styles.metricGridValue}>{analytics?.connectedCalls ?? 0}</Text>
-                </View>
-
-                <View style={styles.metricGridItem}>
-                  <Text style={styles.metricGridLabel}>Today's Calls</Text>
-                  <Text style={styles.metricGridValue}>{analytics?.todayCalls ?? 0}</Text>
-                </View>
-
-                <View style={styles.metricGridItem}>
-                  <Text style={styles.metricGridLabel}>Upcoming Tasks</Text>
-                  <Text style={[styles.metricGridValue, { color: colors.info }]}>
-                    {analytics?.upcomingFollowUps ?? 0}
-                  </Text>
-                </View>
-
-                <View style={styles.metricGridItem}>
-                  <Text style={styles.metricGridLabel}>Missed Tasks</Text>
-                  <Text style={[styles.metricGridValue, { color: colors.danger }]}>
-                    {analytics?.missedFollowUps ?? 0}
-                  </Text>
-                </View>
+                <Text style={[styles.statNumber, { color: '#047857' }]}>
+                  {formatSeconds(analytics?.averageDurationSeconds)}
+                </Text>
+                <Text style={styles.statTitle}>AVG DURATION</Text>
+                <Text style={styles.statSubtitle}>Per connected call</Text>
               </View>
             </View>
           </>
         )}
       </ScrollView>
 
-      {/* Clickable Card Detail Calls Modal */}
+      {/* Custom Date Range Selection Modal */}
       <Modal
-        visible={detailModalVisible}
-        animationType="slide"
+        visible={customModalVisible}
+        animationType="fade"
         transparent
-        onRequestClose={() => setDetailModalVisible(false)}
+        onRequestClose={() => setCustomModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { maxHeight: '80%', paddingBottom: insets.bottom + 16 }]}>
-            <View style={styles.modalHeaderRow}>
-              <View>
-                <Text style={styles.modalTitleText}>{modalTitle}</Text>
-                <Text style={styles.modalSubText}>
-                  {modalCalls.length} call record{modalCalls.length === 1 ? '' : 's'} found
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.modalCloseBtn}
-                onPress={() => setDetailModalVisible(false)}
-              >
+          <View style={styles.customModalCard}>
+            <View style={styles.customModalHeader}>
+              <Text style={styles.customModalTitle}>Select Custom Date Range</Text>
+              <TouchableOpacity onPress={() => setCustomModalVisible(false)}>
                 <Ionicons name="close" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            {modalCalls.length === 0 ? (
-              <EmptyState
-                icon="call-outline"
-                title="No matching calls"
-                message="No records found in this category for the selected period."
-              />
-            ) : (
-              <FlatList
-                data={modalCalls}
-                keyExtractor={(item) => item.id.toString()}
-                contentContainerStyle={{ paddingHorizontal: spacing.md, paddingTop: spacing.xs }}
-                renderItem={({ item }) => (
-                  <Card style={styles.modalCallCard}>
-                    <View style={styles.modalCallHeader}>
-                      <Text style={styles.modalCallName}>
-                        {item.leadName || item.leadPhone || 'Unknown'}
-                      </Text>
-                      <StatusBadge label={item.callStatus} status={item.callStatus} />
-                    </View>
-                    <View style={styles.modalCallMetaRow}>
-                      <Text style={styles.modalCallMeta}>
-                        {item.durationSeconds ? `${item.durationSeconds}s` : '0s'} •{' '}
-                        {item.callDirection || 'OUTBOUND'}
-                      </Text>
-                      {item.leadPhone && (
-                        <TouchableOpacity
-                          onPress={() => {
-                            setDetailModalVisible(false);
-                            Linking.openURL(`tel:${item.leadPhone}`);
-                          }}
-                        >
-                          <Ionicons name="call" size={16} color={colors.callGreen} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </Card>
-                )}
-              />
-            )}
+            <Text style={styles.inputLabel}>From Date (YYYY-MM-DD):</Text>
+            <TextInput
+              style={styles.dateInput}
+              placeholder="2026-09-01"
+              value={customFromDate}
+              onChangeText={setCustomFromDate}
+              placeholderTextColor="#9CA3AF"
+            />
+
+            <Text style={styles.inputLabel}>To Date (YYYY-MM-DD):</Text>
+            <TextInput
+              style={styles.dateInput}
+              placeholder="2026-09-23"
+              value={customToDate}
+              onChangeText={setCustomToDate}
+              placeholderTextColor="#9CA3AF"
+            />
+
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={styles.resetBtn}
+                onPress={handleResetCustomDate}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.resetBtnText}>Reset</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.applyBtn}
+                onPress={handleApplyCustomDate}
+                activeOpacity={0.8}
+              >
+                <GradientView
+                  colors={colors.primaryGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.applyBtnGradient}
+                >
+                  <Text style={styles.applyBtnText}>Apply</Text>
+                </GradientView>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -559,6 +581,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   filterPillText: {
     fontSize: 12,
@@ -583,6 +607,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     marginBottom: spacing.sm + 2,
+    justifyContent: 'space-between',
   },
   totalCard: {
     backgroundColor: '#EFF6FF',
@@ -592,14 +617,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F3FF',
     borderColor: 'rgba(124, 58, 237, 0.22)',
   },
-  notAttendedCard: {
-    backgroundColor: '#FEF2F2',
-    borderColor: 'rgba(239, 68, 68, 0.22)',
-  },
-  freshCard: {
-    backgroundColor: '#F0FDF4',
-    borderColor: 'rgba(34, 197, 94, 0.22)',
-  },
   prospectCard: {
     backgroundColor: '#F0FDFA',
     borderColor: 'rgba(20, 184, 166, 0.22)',
@@ -607,6 +624,30 @@ const styles = StyleSheet.create({
   junkCard: {
     backgroundColor: '#FFF7ED',
     borderColor: 'rgba(249, 115, 22, 0.22)',
+  },
+  notAttendedCard: {
+    backgroundColor: '#FEF2F2',
+    borderColor: 'rgba(239, 68, 68, 0.22)',
+  },
+  missedCard: {
+    backgroundColor: '#FFFBEB',
+    borderColor: 'rgba(245, 158, 11, 0.22)',
+  },
+  outboundCard: {
+    backgroundColor: '#EEF2FF',
+    borderColor: 'rgba(99, 102, 241, 0.22)',
+  },
+  inboundCard: {
+    backgroundColor: '#F0FDF4',
+    borderColor: 'rgba(34, 197, 94, 0.22)',
+  },
+  talkTimeCard: {
+    backgroundColor: '#FAF5FF',
+    borderColor: 'rgba(168, 85, 247, 0.22)',
+  },
+  avgDurationCard: {
+    backgroundColor: '#ECFDF5',
+    borderColor: 'rgba(16, 185, 129, 0.22)',
   },
   statCardTop: {
     flexDirection: 'row',
@@ -622,7 +663,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   statNumber: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.5,
     marginBottom: 4,
@@ -639,151 +680,86 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
-  acceptableCard: {
-    padding: spacing.md,
-    backgroundColor: '#F5F3FF',
-    borderColor: 'rgba(124, 58, 237, 0.22)',
-    borderRadius: 18,
-    borderWidth: 1,
-    marginBottom: spacing.normal,
-  },
-  acceptableHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  acceptableLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  acceptableNumber: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#6D28D9',
-  },
-  sectionHeading: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  breakdownCard: {
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(229, 231, 235, 0.8)',
-    marginBottom: spacing.normal,
-  },
-  breakdownRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 7,
-  },
-  breakdownLabelGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  breakdownDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  breakdownLabel: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  breakdownValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  breakdownDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.sm,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  metricGridItem: {
-    width: '47%',
-    padding: spacing.sm + 2,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: spacing.borderRadius.sm,
-  },
-  metricGridLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  metricGridValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginTop: 2,
-  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(17, 24, 39, 0.4)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(17, 24, 39, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
-  modalSheet: {
+  customModalCard: {
+    width: '100%',
+    maxWidth: 360,
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
   },
-  modalHeaderRow: {
+  customModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.sm,
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  modalTitleText: {
+  customModalTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.textPrimary,
   },
-  modalSubText: {
+  inputLabel: {
     fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 1,
-  },
-  modalCloseBtn: {
-    padding: 4,
-  },
-  modalCallCard: {
-    padding: spacing.sm + 4,
-    marginBottom: spacing.xs + 2,
-  },
-  modalCallHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  modalCallName: {
-    fontSize: 14,
     fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 6,
+    marginTop: 8,
+  },
+  dateInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 14,
     color: colors.textPrimary,
   },
-  modalCallMetaRow: {
+  modalButtonsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
+    gap: 10,
+    marginTop: 20,
   },
-  modalCallMeta: {
-    fontSize: 11,
-    color: colors.textMuted,
+  resetBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  resetBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  applyBtn: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  applyBtnGradient: {
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  applyBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });

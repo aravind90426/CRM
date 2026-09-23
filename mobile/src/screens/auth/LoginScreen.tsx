@@ -7,8 +7,9 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
+  useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,9 +24,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiBaseUrl, setApiBaseUrl } from '../../api/client';
 import { API_BASE_URL, STORAGE_KEYS } from '../../config/constants';
 import { Modal, Alert } from 'react-native';
+import { FormModal } from '../../components/common/FormModal';
 
 export const LoginScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { login } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -205,55 +209,50 @@ export const LoginScreen: React.FC = () => {
       </KeyboardAvoidingView>
 
       {/* Server Config Modal */}
-      <Modal
+      <FormModal
         visible={showServerModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowServerModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleRow}>
-                <Ionicons name="server" size={20} color={colors.primary} />
-                <Text style={styles.modalTitle}>Backend Server URL</Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowServerModal(false)}>
-                <Ionicons name="close" size={22} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalSubtitle}>
-              Ensure your phone and PC are on the same Wi-Fi. Enter your computer's IP address:
-            </Text>
-
-            <Input
-              label="API URL"
-              value={customUrlInput}
-              onChangeText={setCustomUrlInput}
-              placeholder="http://192.168.1.43:8080"
-              autoCapitalize="none"
-              autoCorrect={false}
-              leftIcon="link-outline"
-            />
-
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity
-                style={styles.modalResetBtn}
+        onClose={() => setShowServerModal(false)}
+        title="Backend Server URL"
+        onSave={handleSaveCustomUrl}
+        saveTitle="Save & Connect"
+        saveVariant="primary"
+        heightPercent={0.72}
+        maxHeightPixels={480}
+        customFooter={
+          <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                title="Reset Default"
+                variant="outline"
                 onPress={handleResetDefaultUrl}
-              >
-                <Text style={styles.modalResetText}>Reset Default</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
+                style={{ width: '100%' }}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                title="Save & Connect"
+                variant="primary"
                 onPress={handleSaveCustomUrl}
-              >
-                <Text style={styles.modalSaveText}>Save & Connect</Text>
-              </TouchableOpacity>
+                style={{ width: '100%' }}
+              />
             </View>
           </View>
-        </View>
-      </Modal>
+        }
+      >
+        <Text style={styles.modalSubtitle}>
+          Ensure your phone and PC are on the same Wi-Fi. Enter your computer's IP address:
+        </Text>
+
+        <Input
+          label="API URL"
+          value={customUrlInput}
+          onChangeText={setCustomUrlInput}
+          placeholder="http://192.168.1.43:8080"
+          autoCapitalize="none"
+          autoCorrect={false}
+          leftIcon="link-outline"
+        />
+      </FormModal>
     </SafeAreaView>
   );
 };

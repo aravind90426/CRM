@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,11 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { Card } from '../../components/common/Card';
@@ -26,16 +27,26 @@ const MONTH_NAMES = [
 ];
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const YEARS = [2024, 2025, 2026, 2027, 2028];
 
 export const AttendanceHistoryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+
+  const targetUserId = route.params?.userId as number | undefined;
+  const targetUserName = route.params?.userName as string | undefined;
 
   const today = new Date();
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth() + 1); // 1-indexed
+
   const [monthlyData, setMonthlyData] = useState<AttendanceMonthlyResponse | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<Attendance | null>(null);
   const [selectedDayNumber, setSelectedDayNumber] = useState<number>(today.getDate());
+
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [monthPickerVisible, setMonthPickerVisible] = useState(false);
+  const [yearPickerVisible, setYearPickerVisible] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,7 +56,12 @@ export const AttendanceHistoryScreen: React.FC = () => {
     if (!isRefresh) setLoading(true);
     setError(null);
     try {
-      const data = await attendanceApi.getMonthlyAttendance(currentYear, currentMonth);
+      let data: AttendanceMonthlyResponse;
+      if (targetUserId) {
+        data = await attendanceApi.getUserMonthlyAttendance(targetUserId, currentYear, currentMonth);
+      } else {
+        data = await attendanceApi.getMonthlyAttendance(currentYear, currentMonth);
+      }
       setMonthlyData(data);
 
       // Auto-select today's record if in current month
@@ -60,7 +76,7 @@ export const AttendanceHistoryScreen: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [currentYear, currentMonth, selectedDayNumber]);
+  }, [targetUserId, currentYear, currentMonth, selectedDayNumber]);
 
   useEffect(() => {
     fetchMonthly();
@@ -93,6 +109,61 @@ export const AttendanceHistoryScreen: React.FC = () => {
   const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
   const firstDayIndex = new Date(currentYear, currentMonth - 1, 1).getDay();
 
+  // Elapsed days calculation:
+  // If current month: elapsed days = today.getDate()
+  // If past month: elapsed days = daysInMonth
+  // If future month: elapsed days = 0
+  const isCurrentMonth = today.getFullYear() === currentYear && (today.getMonth() + 1) === currentMonth;
+  const isPastMonth = currentYear < today.getFullYear() || (currentYear === today.getFullYear() && currentMonth < (today.getMonth() + 1));
+  const isFutureMonth = currentYear > today.getFullYear() || (currentYear === today.getFullYear() && currentMonth > (today.getMonth() + 1));
+
+  const elapsedDays = isFutureMonth ? 0 : isCurrentMonth ? today.getDate() : daysInMonth;
+
+  // KPIs
+  const totalDays = monthlyData?.totalDays || daysInMonth;
+  const presentDays = monthlyData?.presentDays || 0;
+  const fullDays = monthlyData?.fullDays ?? 0;
+  const halfDays = monthlyData?.halfDays ?? 0;
+  // Off Days = Elapsed days in month minus Present days (future dates NOT counted)
+  const computedOffDays = Math.max(0, elapsedDays - presentDays);
+  const offDays = monthlyData?.offDays !== undefined ? monthlyData.offDays : computedOffDays;
+
+  // Format time deterministically to avoid client timezone offset
+  const formatAttendanceTime = (timeStr?: string | null) => {
+    if (!timeStr) return '--:--';
+    const timePart = timeStr.includes('T')
+      ? timeStr.split('T')[1]
+      : timeStr.includes(' ')
+      ? timeStr.split(' ')[1]
+      : timeStr;
+    const parts = timePart.split(':');
+    if (parts.length >= 2) {
+      let hours = parseInt(parts[0], 10);
+      const minutes = parts[1].slice(0, 2);
+      if (!isNaN(hours)) {
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours === 0 ? 12 : hours;
+        return `${hours}:${minutes} ${ampm}`;
+      }
+    }
+    try {
+      const d = new Date(timeStr);
+      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+    } catch {
+      return timeStr.slice(11, 16);
+    }
+  };
+
+  const formatDurationDisplay = (minutes?: number | null) => {
+    if (minutes == null || minutes === undefined || isNaN(minutes) || minutes <= 0) return '--';
+    const hrs = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
+    if (hrs > 0) return `${hrs}h`;
+    return `${mins}m`;
+  };
+
   const handleSelectDay = (day: number) => {
     setSelectedDayNumber(day);
     const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -100,20 +171,37 @@ export const AttendanceHistoryScreen: React.FC = () => {
     setSelectedRecord(record || null);
   };
 
-  const formatTime = (timeStr?: string) => {
-    if (!timeStr) return '--:--';
-    try {
-      return new Date(timeStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return timeStr.slice(11, 16);
+  // Day-by-day descending list items for elapsed days
+  const dailyHistoryList = useMemo(() => {
+    if (isFutureMonth || elapsedDays === 0) return [];
+    const items = [];
+    for (let day = elapsedDays; day >= 1; day--) {
+      const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const record = monthlyData?.records?.find((r) => r.date === dateStr);
+      const dateObj = new Date(currentYear, currentMonth - 1, day);
+      const weekdayName = WEEKDAYS[dateObj.getDay()];
+      const isToday = isCurrentMonth && day === today.getDate();
+
+      items.push({
+        day,
+        dateStr,
+        weekdayName,
+        isToday,
+        record: record || null,
+      });
     }
-  };
+    return items;
+  }, [currentYear, currentMonth, elapsedDays, isFutureMonth, isCurrentMonth, monthlyData]);
 
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.container}>
       <Header
-        title="Attendance History"
-        subtitle="Monthly logs & performance summary"
+        title={targetUserName ? `${targetUserName}'s Attendance` : 'Attendance History'}
+        subtitle={
+          targetUserName
+            ? `Monthly logs & records for ${targetUserName}`
+            : 'Monthly logs & performance summary'
+        }
         onBack={() => navigation.goBack()}
       />
 
@@ -129,17 +217,63 @@ export const AttendanceHistoryScreen: React.FC = () => {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Month Navigator Header */}
-        <View style={styles.monthNavigator}>
-          <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
-            <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.monthTitle}>
-            {MONTH_NAMES[currentMonth - 1]} {currentYear}
-          </Text>
-          <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
-            <Ionicons name="chevron-forward" size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
+        {/* User Banner (when viewing another employee's attendance as Admin) */}
+        {targetUserName && (
+          <View style={styles.userBanner}>
+            <View style={styles.userAvatar}>
+              <Text style={styles.userAvatarText}>{targetUserName.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.userBannerName}>{targetUserName}</Text>
+              <Text style={styles.userBannerSub}>Viewing employee attendance logs</Text>
+            </View>
+            <View style={styles.adminViewingBadge}>
+              <Ionicons name="shield-checkmark" size={12} color={colors.primary} />
+              <Text style={styles.adminViewingText}>Admin View</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Filter Row: [ Month ▼ ] [ Year ▼ ] with Prev/Next Quick Steppers */}
+        <View style={styles.filterSection}>
+          <View style={styles.dropdownsRow}>
+            {/* Month Dropdown Button */}
+            <TouchableOpacity
+              style={styles.filterDropdown}
+              onPress={() => setMonthPickerVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.filterDropdownLabel}>Month</Text>
+              <View style={styles.filterDropdownValueRow}>
+                <Text style={styles.filterDropdownValue}>{MONTH_NAMES[currentMonth - 1]}</Text>
+                <Ionicons name="chevron-down" size={14} color={colors.primary} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Year Dropdown Button */}
+            <TouchableOpacity
+              style={styles.filterDropdown}
+              onPress={() => setYearPickerVisible(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.filterDropdownLabel}>Year</Text>
+              <View style={styles.filterDropdownValueRow}>
+                <Text style={styles.filterDropdownValue}>{currentYear}</Text>
+                <Ionicons name="chevron-down" size={14} color={colors.primary} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Quick Prev / Next Month Stepper */}
+            <View style={styles.stepperContainer}>
+              <TouchableOpacity onPress={handlePrevMonth} style={styles.stepperBtn} activeOpacity={0.7}>
+                <Ionicons name="chevron-back" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+              <View style={styles.stepperDivider} />
+              <TouchableOpacity onPress={handleNextMonth} style={styles.stepperBtn} activeOpacity={0.7}>
+                <Ionicons name="chevron-forward" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         {loading && !refreshing ? (
@@ -148,166 +282,511 @@ export const AttendanceHistoryScreen: React.FC = () => {
           <ErrorState message={error} onRetry={() => fetchMonthly()} />
         ) : (
           <>
-            {/* Monthly Summary Cards Grid */}
-            <View style={styles.summaryGrid}>
-              <Card style={styles.summaryCard}>
-                <Text style={[styles.summaryCount, { color: colors.success }]}>
-                  {monthlyData?.presentDays || 0}
-                </Text>
-                <Text style={styles.summaryLabel}>Present</Text>
-              </Card>
+            {/* Summary KPI Cards Grid (5 Metrics Required) */}
+            <View style={styles.summaryContainer}>
+              <Text style={styles.sectionHeaderTitle}>MONTHLY SUMMARY</Text>
 
-              <Card style={styles.summaryCard}>
-                <Text style={[styles.summaryCount, { color: colors.warning }]}>
-                  {monthlyData?.halfDays || 0}
-                </Text>
-                <Text style={styles.summaryLabel}>Half Days</Text>
-              </Card>
+              {/* Row 1: Total Days, Present Days, Off Days */}
+              <View style={styles.kpiRow}>
+                <Card style={styles.kpiCard}>
+                  <View style={[styles.kpiIconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
+                    <Ionicons name="calendar-outline" size={15} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.kpiCount, { color: colors.textPrimary }]}>{totalDays}</Text>
+                  <Text style={styles.kpiLabel}>Total Days</Text>
+                </Card>
 
-              <Card style={styles.summaryCard}>
-                <Text style={[styles.summaryCount, { color: colors.danger }]}>
-                  {monthlyData?.leaveDays || 0}
-                </Text>
-                <Text style={styles.summaryLabel}>Leaves</Text>
-              </Card>
+                <Card style={styles.kpiCard}>
+                  <View style={[styles.kpiIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                    <Ionicons name="checkmark-circle-outline" size={15} color={colors.success} />
+                  </View>
+                  <Text style={[styles.kpiCount, { color: colors.success }]}>{presentDays}</Text>
+                  <Text style={styles.kpiLabel}>Present Days</Text>
+                </Card>
 
-              <Card style={styles.summaryCard}>
-                <Text style={[styles.summaryCount, { color: colors.primary }]}>
-                  {monthlyData?.totalWorkingHours || 0}h
-                </Text>
-                <Text style={styles.summaryLabel}>Total Hours</Text>
-              </Card>
+                <Card style={styles.kpiCard}>
+                  <View style={[styles.kpiIconCircle, { backgroundColor: 'rgba(148, 163, 184, 0.15)' }]}>
+                    <Ionicons name="close-circle-outline" size={15} color="#64748B" />
+                  </View>
+                  <Text style={[styles.kpiCount, { color: '#64748B' }]}>{offDays}</Text>
+                  <Text style={styles.kpiLabel}>Off / Absent</Text>
+                </Card>
+              </View>
+
+              {/* Row 2: Full Days (>=4h), Half Days (<4h), Total Working Hours */}
+              <View style={styles.kpiRow}>
+                <Card style={styles.kpiCard}>
+                  <View style={[styles.kpiIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                    <Ionicons name="sunny-outline" size={15} color={colors.success} />
+                  </View>
+                  <Text style={[styles.kpiCount, { color: colors.success }]}>{fullDays}</Text>
+                  <Text style={styles.kpiLabel}>Full Days (≥4h)</Text>
+                </Card>
+
+                <Card style={styles.kpiCard}>
+                  <View style={[styles.kpiIconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                    <Ionicons name="partly-sunny-outline" size={15} color={colors.warning} />
+                  </View>
+                  <Text style={[styles.kpiCount, { color: colors.warning }]}>{halfDays}</Text>
+                  <Text style={styles.kpiLabel}>Half Days (&lt;4h)</Text>
+                </Card>
+
+                <Card style={styles.kpiCard}>
+                  <View style={[styles.kpiIconCircle, { backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}>
+                    <Ionicons name="time-outline" size={15} color="#6366F1" />
+                  </View>
+                  <Text style={[styles.kpiCount, { color: '#6366F1' }]}>
+                    {monthlyData?.totalWorkingHours || 0}h
+                  </Text>
+                  <Text style={styles.kpiLabel}>Total Hours</Text>
+                </Card>
+              </View>
             </View>
 
-            {/* Calendar View Card */}
-            <Card style={styles.calendarCard}>
-              {/* Day Headers (Sun - Sat) */}
-              <View style={styles.weekdaysRow}>
-                {WEEKDAYS.map((d) => (
-                  <Text key={d} style={styles.weekdayText}>
-                    {d}
-                  </Text>
-                ))}
-              </View>
-
-              {/* Day Cells Grid */}
-              <View style={styles.daysGrid}>
-                {/* Empty cells before month start */}
-                {Array.from({ length: firstDayIndex }).map((_, i) => (
-                  <View key={`empty-${i}`} style={styles.dayCell} />
-                ))}
-
-                {/* Days of current month */}
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                  const day = i + 1;
-                  const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                  const record = monthlyData?.records?.find((r) => r.date === dateStr);
-                  const isSelected = selectedDayNumber === day;
-
-                  let statusDotColor: string | null = null;
-                  if (record) {
-                    if (record.status === 'PRESENT') statusDotColor = colors.success;
-                    else if (record.status === 'HALF_DAY') statusDotColor = colors.warning;
-                    else if (record.status === 'LEAVE') statusDotColor = colors.danger;
-                    else if (record.status === 'HOLIDAY') statusDotColor = colors.info;
-                  }
-
-                  return (
-                    <TouchableOpacity
-                      key={`day-${day}`}
-                      style={[
-                        styles.dayCell,
-                        isSelected && styles.dayCellSelected,
-                      ]}
-                      onPress={() => handleSelectDay(day)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.dayText,
-                          isSelected && styles.dayTextSelected,
-                        ]}
-                      >
-                        {day}
-                      </Text>
-                      {statusDotColor && (
-                        <View style={[styles.statusDot, { backgroundColor: statusDotColor }]} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Status Legend */}
-              <View style={styles.legendRow}>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
-                  <Text style={styles.legendText}>Present</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
-                  <Text style={styles.legendText}>Half Day</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
-                  <Text style={styles.legendText}>Leave</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: colors.info }]} />
-                  <Text style={styles.legendText}>Holiday</Text>
-                </View>
-              </View>
-            </Card>
-
-            {/* Selected Date Detail Drawer */}
-            <Card style={styles.detailCard}>
-              <View style={styles.detailHeader}>
-                <View>
-                  <Text style={styles.detailDateText}>
-                    {MONTH_NAMES[currentMonth - 1]} {selectedDayNumber}, {currentYear}
-                  </Text>
-                  <Text style={styles.detailSubText}>Daily Attendance Breakdown</Text>
-                </View>
-                <Badge
-                  label={selectedRecord ? selectedRecord.status : 'No Record'}
-                  status={selectedRecord ? selectedRecord.status : 'neutral'}
+            {/* View Mode Toggle: Day-by-Day List vs Calendar Grid */}
+            <View style={styles.viewToggleRow}>
+              <TouchableOpacity
+                style={[styles.toggleBtn, viewMode === 'list' && styles.toggleBtnActive]}
+                onPress={() => setViewMode('list')}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="list-outline"
+                  size={15}
+                  color={viewMode === 'list' ? '#FFFFFF' : colors.textSecondary}
                 />
-              </View>
+                <Text style={[styles.toggleBtnText, viewMode === 'list' && styles.toggleBtnTextActive]}>
+                  Daily History List
+                </Text>
+              </TouchableOpacity>
 
-              {selectedRecord ? (
-                <View style={styles.detailMetricsRow}>
-                  <View style={styles.detailMetric}>
-                    <Text style={styles.detailMetricLabel}>Clock In</Text>
-                    <Text style={styles.detailMetricValue}>
-                      {formatTime(selectedRecord.clockInTime)}
-                    </Text>
-                  </View>
-                  <View style={styles.metricDivider} />
-                  <View style={styles.detailMetric}>
-                    <Text style={styles.detailMetricLabel}>Clock Out</Text>
-                    <Text style={styles.detailMetricValue}>
-                      {formatTime(selectedRecord.clockOutTime)}
-                    </Text>
-                  </View>
-                  <View style={styles.metricDivider} />
-                  <View style={styles.detailMetric}>
-                    <Text style={styles.detailMetricLabel}>Duration</Text>
-                    <Text style={[styles.detailMetricValue, { color: colors.primary }]}>
-                      {Math.floor((selectedRecord.durationMinutes || 0) / 60)}h{' '}
-                      {(selectedRecord.durationMinutes || 0) % 60}m
-                    </Text>
-                  </View>
+              <TouchableOpacity
+                style={[styles.toggleBtn, viewMode === 'calendar' && styles.toggleBtnActive]}
+                onPress={() => setViewMode('calendar')}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="grid-outline"
+                  size={15}
+                  color={viewMode === 'calendar' ? '#FFFFFF' : colors.textSecondary}
+                />
+                <Text
+                  style={[styles.toggleBtnText, viewMode === 'calendar' && styles.toggleBtnTextActive]}
+                >
+                  Calendar Grid
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* VIEW MODE 1: DAY-BY-DAY ATTENDANCE HISTORY LIST */}
+            {viewMode === 'list' && (
+              <View style={styles.historyListSection}>
+                <View style={styles.historySectionHeader}>
+                  <Text style={styles.historySectionTitle}>
+                    {MONTH_NAMES[currentMonth - 1]} {currentYear} Logs
+                  </Text>
+                  <Text style={styles.historySectionSub}>
+                    {isFutureMonth
+                      ? 'Upcoming month'
+                      : `Showing ${dailyHistoryList.length} elapsed days`}
+                  </Text>
                 </View>
-              ) : (
-                <View style={styles.noRecordContainer}>
-                  <Ionicons name="calendar-outline" size={20} color={colors.textMuted} />
-                  <Text style={styles.noRecordText}>No attendance logged for this date.</Text>
-                </View>
-              )}
-            </Card>
+
+                {isFutureMonth ? (
+                  <Card style={styles.emptyCard}>
+                    <Ionicons name="calendar-outline" size={32} color={colors.textMuted} />
+                    <Text style={styles.emptyTitle}>Upcoming Month</Text>
+                    <Text style={styles.emptyMessage}>
+                      No attendance has been recorded for future months.
+                    </Text>
+                  </Card>
+                ) : dailyHistoryList.length === 0 ? (
+                  <Card style={styles.emptyCard}>
+                    <Ionicons name="calendar-clear-outline" size={32} color={colors.textMuted} />
+                    <Text style={styles.emptyTitle}>No Days Elapsed</Text>
+                    <Text style={styles.emptyMessage}>No logs recorded for this period.</Text>
+                  </Card>
+                ) : (
+                  dailyHistoryList.map(({ day, dateStr, weekdayName, isToday, record }) => {
+                    const isPresent = record?.status === 'PRESENT';
+                    const isHalfDay = record?.status === 'HALF_DAY';
+                    const isLeave = record?.status === 'LEAVE';
+                    const isHoliday = record?.status === 'HOLIDAY';
+
+                    if (isPresent || isHalfDay) {
+                      const isFull = (record?.durationMinutes || 0) >= 240;
+                      return (
+                        <Card key={dateStr} style={[styles.dayCard, isToday && styles.dayCardToday]}>
+                          <View style={styles.dayCardHeader}>
+                            <View style={styles.dateBlock}>
+                              <Text style={styles.dateDayNumber}>
+                                {day} {MONTH_NAMES[currentMonth - 1].slice(0, 3)} {currentYear}
+                              </Text>
+                              <View style={styles.weekdayBadge}>
+                                <Text style={styles.weekdayText}>{weekdayName}</Text>
+                                {isToday && <Text style={styles.todayPill}>TODAY</Text>}
+                              </View>
+                            </View>
+
+                            <View
+                              style={[
+                                styles.statusPill,
+                                isFull ? styles.statusPillPresent : styles.statusPillHalfDay,
+                              ]}
+                            >
+                              <Ionicons
+                                name={isFull ? 'checkmark-circle' : 'time'}
+                                size={13}
+                                color={isFull ? '#10B981' : '#F59E0B'}
+                              />
+                              <Text
+                                style={[
+                                  styles.statusPillText,
+                                  isFull ? styles.statusTextPresent : styles.statusTextHalfDay,
+                                ]}
+                              >
+                                {isFull ? 'Present' : 'Half Day'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.dayCardBody}>
+                            <View style={styles.timeCol}>
+                              <Text style={styles.timeColLabel}>Clock In</Text>
+                              <View style={styles.timeValRow}>
+                                <Ionicons name="enter-outline" size={13} color="#10B981" />
+                                <Text style={styles.timeValText}>
+                                  {formatAttendanceTime(record?.clockInTime)}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <Ionicons
+                              name="arrow-forward"
+                              size={14}
+                              color={colors.textMuted}
+                              style={styles.timeArrow}
+                            />
+
+                            <View style={styles.timeCol}>
+                              <Text style={styles.timeColLabel}>Clock Out</Text>
+                              <View style={styles.timeValRow}>
+                                <Ionicons
+                                  name="exit-outline"
+                                  size={13}
+                                  color={record?.clockOutTime ? '#EF4444' : colors.textMuted}
+                                />
+                                <Text style={styles.timeValText}>
+                                  {record?.clockOutTime
+                                    ? formatAttendanceTime(record.clockOutTime)
+                                    : 'Ongoing'}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View style={styles.durationCol}>
+                              <Text style={styles.timeColLabel}>Duration</Text>
+                              <View style={styles.durationBadge}>
+                                <Ionicons name="hourglass-outline" size={12} color={colors.primary} />
+                                <Text style={styles.durationBadgeText}>
+                                  {formatDurationDisplay(record?.durationMinutes)}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        </Card>
+                      );
+                    }
+
+                    if (isLeave || isHoliday) {
+                      return (
+                        <Card key={dateStr} style={[styles.dayCard, styles.dayCardOff]}>
+                          <View style={styles.dayCardHeader}>
+                            <View style={styles.dateBlock}>
+                              <Text style={styles.dateDayNumber}>
+                                {day} {MONTH_NAMES[currentMonth - 1].slice(0, 3)} {currentYear}
+                              </Text>
+                              <View style={styles.weekdayBadge}>
+                                <Text style={styles.weekdayText}>{weekdayName}</Text>
+                                {isToday && <Text style={styles.todayPill}>TODAY</Text>}
+                              </View>
+                            </View>
+
+                            <View
+                              style={[
+                                styles.statusPill,
+                                isLeave ? styles.statusPillLeave : styles.statusPillHoliday,
+                              ]}
+                            >
+                              <Ionicons
+                                name={isLeave ? 'calendar-outline' : 'sparkles-outline'}
+                                size={13}
+                                color={isLeave ? colors.danger : colors.info}
+                              />
+                              <Text
+                                style={[
+                                  styles.statusPillText,
+                                  isLeave ? styles.statusTextLeave : styles.statusTextHoliday,
+                                ]}
+                              >
+                                {isLeave ? 'Leave' : 'Holiday'}
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.offDayFooter}>
+                            <Text style={styles.offDayNote}>
+                              {isLeave ? 'Approved leave' : 'Public holiday'}
+                            </Text>
+                          </View>
+                        </Card>
+                      );
+                    }
+
+                    // User did not attend (Off Day)
+                    return (
+                      <Card key={dateStr} style={[styles.dayCard, styles.dayCardOff]}>
+                        <View style={styles.dayCardHeader}>
+                          <View style={styles.dateBlock}>
+                            <Text style={styles.dateDayNumber}>
+                              {day} {MONTH_NAMES[currentMonth - 1].slice(0, 3)} {currentYear}
+                            </Text>
+                            <View style={styles.weekdayBadge}>
+                              <Text style={styles.weekdayText}>{weekdayName}</Text>
+                              {isToday && <Text style={styles.todayPill}>TODAY</Text>}
+                            </View>
+                          </View>
+
+                          <View style={styles.statusPillOff}>
+                            <Ionicons name="close-circle-outline" size={13} color="#94A3B8" />
+                            <Text style={styles.statusPillTextOff}>Off Day</Text>
+                          </View>
+                        </View>
+                        <View style={styles.offDayFooter}>
+                          <Ionicons name="moon-outline" size={13} color={colors.textMuted} />
+                          <Text style={styles.offDayNote}>No attendance logged for this day</Text>
+                        </View>
+                      </Card>
+                    );
+                  })
+                )}
+              </View>
+            )}
+
+            {/* VIEW MODE 2: CALENDAR GRID */}
+            {viewMode === 'calendar' && (
+              <>
+                <Card style={styles.calendarCard}>
+                  {/* Day Headers (Sun - Sat) */}
+                  <View style={styles.weekdaysRow}>
+                    {WEEKDAYS.map((d) => (
+                      <Text key={d} style={styles.weekdayHeader}>
+                        {d}
+                      </Text>
+                    ))}
+                  </View>
+
+                  {/* Day Cells Grid */}
+                  <View style={styles.daysGrid}>
+                    {/* Empty cells before month start */}
+                    {Array.from({ length: firstDayIndex }).map((_, i) => (
+                      <View key={`empty-${i}`} style={styles.dayCell} />
+                    ))}
+
+                    {/* Days of current month */}
+                    {Array.from({ length: daysInMonth }).map((_, i) => {
+                      const day = i + 1;
+                      const dateStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                      const record = monthlyData?.records?.find((r) => r.date === dateStr);
+                      const isSelected = selectedDayNumber === day;
+
+                      let statusDotColor: string | null = null;
+                      if (record) {
+                        if (record.status === 'PRESENT') statusDotColor = colors.success;
+                        else if (record.status === 'HALF_DAY') statusDotColor = colors.warning;
+                        else if (record.status === 'LEAVE') statusDotColor = colors.danger;
+                        else if (record.status === 'HOLIDAY') statusDotColor = colors.info;
+                      }
+
+                      return (
+                        <TouchableOpacity
+                          key={`day-${day}`}
+                          style={[styles.dayCell, isSelected && styles.dayCellSelected]}
+                          onPress={() => handleSelectDay(day)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>
+                            {day}
+                          </Text>
+                          {statusDotColor && (
+                            <View style={[styles.statusDot, { backgroundColor: statusDotColor }]} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {/* Status Legend */}
+                  <View style={styles.legendRow}>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
+                      <Text style={styles.legendText}>Present</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
+                      <Text style={styles.legendText}>Half Day</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
+                      <Text style={styles.legendText}>Leave</Text>
+                    </View>
+                    <View style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: colors.info }]} />
+                      <Text style={styles.legendText}>Holiday</Text>
+                    </View>
+                  </View>
+                </Card>
+
+                {/* Selected Date Detail Drawer */}
+                <Card style={styles.detailCard}>
+                  <View style={styles.detailHeader}>
+                    <View>
+                      <Text style={styles.detailDateText}>
+                        {MONTH_NAMES[currentMonth - 1]} {selectedDayNumber}, {currentYear}
+                      </Text>
+                      <Text style={styles.detailSubText}>Daily Attendance Breakdown</Text>
+                    </View>
+                    <Badge
+                      label={selectedRecord ? selectedRecord.status : 'No Record'}
+                      status={selectedRecord ? selectedRecord.status : 'neutral'}
+                    />
+                  </View>
+
+                  {selectedRecord ? (
+                    <View style={styles.detailMetricsRow}>
+                      <View style={styles.detailMetric}>
+                        <Text style={styles.detailMetricLabel}>Clock In</Text>
+                        <Text style={styles.detailMetricValue}>
+                          {formatAttendanceTime(selectedRecord.clockInTime)}
+                        </Text>
+                      </View>
+                      <View style={styles.metricDivider} />
+                      <View style={styles.detailMetric}>
+                        <Text style={styles.detailMetricLabel}>Clock Out</Text>
+                        <Text style={styles.detailMetricValue}>
+                          {formatAttendanceTime(selectedRecord.clockOutTime)}
+                        </Text>
+                      </View>
+                      <View style={styles.metricDivider} />
+                      <View style={styles.detailMetric}>
+                        <Text style={styles.detailMetricLabel}>Duration</Text>
+                        <Text style={[styles.detailMetricValue, { color: colors.primary }]}>
+                          {formatDurationDisplay(selectedRecord.durationMinutes)}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.noRecordContainer}>
+                      <Ionicons name="calendar-outline" size={20} color={colors.textMuted} />
+                      <Text style={styles.noRecordText}>No attendance logged for this date.</Text>
+                    </View>
+                  )}
+                </Card>
+              </>
+            )}
           </>
         )}
       </ScrollView>
+
+      {/* MONTH PICKER MODAL */}
+      <Modal
+        visible={monthPickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMonthPickerVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setMonthPickerVisible(false)}
+        >
+          <View style={styles.pickerModalCard}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Select Month</Text>
+              <TouchableOpacity onPress={() => setMonthPickerVisible(false)}>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.monthsGrid}>
+              {MONTH_NAMES.map((name, index) => {
+                const monthNum = index + 1;
+                const isSelected = currentMonth === monthNum;
+                return (
+                  <TouchableOpacity
+                    key={name}
+                    style={[styles.monthOption, isSelected && styles.monthOptionSelected]}
+                    onPress={() => {
+                      setCurrentMonth(monthNum);
+                      setMonthPickerVisible(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[styles.monthOptionText, isSelected && styles.monthOptionTextSelected]}
+                    >
+                      {name.slice(0, 3)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* YEAR PICKER MODAL */}
+      <Modal
+        visible={yearPickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setYearPickerVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setYearPickerVisible(false)}
+        >
+          <View style={styles.pickerModalCard}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Select Year</Text>
+              <TouchableOpacity onPress={() => setYearPickerVisible(false)}>
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.yearsGrid}>
+              {YEARS.map((y) => {
+                const isSelected = currentYear === y;
+                return (
+                  <TouchableOpacity
+                    key={y}
+                    style={[styles.yearOption, isSelected && styles.yearOptionSelected]}
+                    onPress={() => {
+                      setCurrentYear(y);
+                      setYearPickerVisible(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.yearOptionText, isSelected && styles.yearOptionTextSelected]}>
+                      {y}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -319,49 +798,379 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: spacing.md,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.xxl + 20,
   },
-  monthNavigator: {
+  userBanner: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
-    backgroundColor: colors.surfaceElevated,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    gap: spacing.sm + 2,
+    backgroundColor: colors.surfaceCard,
+    padding: spacing.sm + 2,
     borderRadius: spacing.borderRadius.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
   },
-  navButton: {
-    padding: spacing.xs,
+  userAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  monthTitle: {
+  userAvatarText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
     fontSize: 16,
+  },
+  userBannerName: {
+    fontSize: 14,
     fontWeight: '700',
     color: colors.textPrimary,
   },
-  summaryGrid: {
+  userBannerSub: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  adminViewingBadge: {
     flexDirection: 'row',
-    gap: spacing.xs + 2,
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  adminViewingText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  filterSection: {
     marginBottom: spacing.md,
   },
-  summaryCard: {
+  dropdownsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  filterDropdown: {
+    flex: 1,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing.borderRadius.md,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs + 2,
+  },
+  filterDropdownLabel: {
+    fontSize: 9,
+    color: colors.textMuted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  filterDropdownValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  filterDropdownValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  stepperContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: spacing.borderRadius.md,
+    overflow: 'hidden',
+  },
+  stepperBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm + 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperDivider: {
+    width: 1,
+    backgroundColor: colors.border,
+  },
+  sectionHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textMuted,
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs + 2,
+  },
+  summaryContainer: {
+    marginBottom: spacing.md,
+  },
+  kpiRow: {
+    flexDirection: 'row',
+    gap: spacing.xs + 2,
+    marginBottom: spacing.xs + 2,
+  },
+  kpiCard: {
     flex: 1,
     alignItems: 'center',
-    padding: spacing.sm + 2,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: 4,
     backgroundColor: colors.surfaceCard,
     marginBottom: 0,
   },
-  summaryCount: {
-    fontSize: 18,
+  kpiIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  kpiCount: {
+    fontSize: 17,
     fontWeight: '800',
   },
-  summaryLabel: {
+  kpiLabel: {
     fontSize: 10,
     color: colors.textSecondary,
     marginTop: 2,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  viewToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: spacing.borderRadius.md,
+    padding: 3,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  toggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: spacing.xs + 3,
+    borderRadius: spacing.borderRadius.sm,
+  },
+  toggleBtnActive: {
+    backgroundColor: colors.primary,
+  },
+  toggleBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  toggleBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  historyListSection: {
+    marginBottom: spacing.md,
+  },
+  historySectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: spacing.sm,
+  },
+  historySectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  historySectionSub: {
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  dayCard: {
+    padding: spacing.sm + 2,
+    marginBottom: spacing.xs + 3,
+    backgroundColor: colors.surfaceCard,
+  },
+  dayCardToday: {
+    borderColor: 'rgba(59, 130, 246, 0.4)',
+    borderWidth: 1.5,
+  },
+  dayCardOff: {
+    opacity: 0.85,
+    backgroundColor: colors.surface,
+  },
+  dayCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs + 2,
+  },
+  dateBlock: {
+    flexDirection: 'column',
+  },
+  dateDayNumber: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  weekdayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 1,
+  },
+  weekdayText: {
+    fontSize: 11,
+    color: colors.textMuted,
     fontWeight: '500',
+  },
+  todayPill: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.primary,
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusPillPresent: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  statusPillHalfDay: {
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+  },
+  statusPillLeave: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  statusPillHoliday: {
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+  },
+  statusPillOff: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    backgroundColor: 'rgba(148, 163, 184, 0.12)',
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  statusTextPresent: {
+    color: '#10B981',
+  },
+  statusTextHalfDay: {
+    color: '#F59E0B',
+  },
+  statusTextLeave: {
+    color: colors.danger,
+  },
+  statusTextHoliday: {
+    color: colors.info,
+  },
+  statusPillTextOff: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  dayCardBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: spacing.borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+    marginTop: 2,
+  },
+  timeCol: {
+    flex: 1,
+  },
+  timeColLabel: {
+    fontSize: 9,
+    color: colors.textMuted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  timeValRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  timeValText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  timeArrow: {
+    marginHorizontal: 4,
+    marginTop: 10,
+  },
+  durationCol: {
+    alignItems: 'flex-end',
+  },
+  durationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 2,
+  },
+  durationBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  offDayFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: spacing.borderRadius.sm,
+    marginTop: 2,
+  },
+  offDayNote: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+  },
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    backgroundColor: colors.surfaceCard,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginTop: spacing.sm,
+  },
+  emptyMessage: {
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: 4,
   },
   calendarCard: {
     padding: spacing.md,
@@ -376,7 +1185,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     paddingBottom: spacing.xs,
   },
-  weekdayText: {
+  weekdayHeader: {
     fontSize: 11,
     fontWeight: '600',
     color: colors.textMuted,
@@ -496,5 +1305,91 @@ const styles = StyleSheet.create({
   noRecordText: {
     color: colors.textMuted,
     fontSize: 13,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  pickerModalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: colors.surfaceCard,
+    borderRadius: spacing.borderRadius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    paddingBottom: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  pickerModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  monthsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+  },
+  monthOption: {
+    width: '30%',
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: spacing.borderRadius.sm,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  monthOptionSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  monthOptionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  monthOptionTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  yearsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+  },
+  yearOption: {
+    width: '30%',
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: spacing.borderRadius.sm,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  yearOptionSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  yearOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  yearOptionTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });

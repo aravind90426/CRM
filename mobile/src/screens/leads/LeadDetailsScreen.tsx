@@ -13,8 +13,11 @@ import {
   ActivityIndicator,
   AppState,
   AppStateStatus,
+  KeyboardAvoidingView,
+  Platform,
+  useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
@@ -24,6 +27,7 @@ import { Badge } from '../../components/common/Badge';
 import { Header } from '../../components/common/Header';
 import { LoadingState } from '../../components/common/LoadingState';
 import { ErrorState } from '../../components/common/ErrorState';
+import { FormModal } from '../../components/common/FormModal';
 import { LogCallModal } from '../../components/leads/LogCallModal';
 import { FollowUpModal } from '../../components/leads/FollowUpModal';
 import { ConvertSaleModal } from '../../components/leads/ConvertSaleModal';
@@ -41,6 +45,8 @@ type DetailTab = 'OVERVIEW' | 'TIMELINE' | 'CALLS' | 'FOLLOWUPS' | 'NOTES' | 'AS
 export const LeadDetailsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const { height: screenHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const leadId = route.params?.leadId;
   const { isAdmin, user } = useAuth();
 
@@ -149,6 +155,13 @@ export const LeadDetailsScreen: React.FC = () => {
       }).catch(() => {});
     }
   }, [loadData, isAdmin]);
+
+  // Auto-fetch fresh data whenever switching to TIMELINE or CALLS tab
+  useEffect(() => {
+    if (activeTab === 'TIMELINE' || activeTab === 'CALLS') {
+      loadData(true);
+    }
+  }, [activeTab, loadData]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -750,13 +763,6 @@ export const LeadDetailsScreen: React.FC = () => {
           <View>
             <View style={styles.tabActionsRow}>
               <Text style={styles.tabSectionTitle}>Customer Lifecycle Timeline</Text>
-              <TouchableOpacity
-                style={styles.tabAddButton}
-                onPress={() => loadData(true)}
-              >
-                <Ionicons name="refresh" size={14} color={colors.primary} />
-                <Text style={styles.tabAddText}>Refresh</Text>
-              </TouchableOpacity>
             </View>
 
             {timeline.length === 0 ? (
@@ -798,14 +804,16 @@ export const LeadDetailsScreen: React.FC = () => {
                     </Text>
                   </View>
 
-                  {/* Metadata Chips / Badges */}
+                  {/* Metadata Chips / Badges - Single clean status badge */}
                   <View style={styles.timelineBadgesRow}>
-                    {item.technicalStatus && (
-                      <Badge label={item.technicalStatus} status={item.technicalStatus} />
-                    )}
-                    {item.businessClassification && (
+                    {item.businessClassification ? (
                       <Badge label={item.businessClassification} status={item.businessClassification} />
-                    )}
+                    ) : item.followUpStatus ? (
+                      <Badge label={item.followUpStatus} status={item.followUpStatus} />
+                    ) : item.technicalStatus ? (
+                      <Badge label={item.technicalStatus} status={item.technicalStatus} />
+                    ) : null}
+
                     {item.durationSeconds !== undefined && item.durationSeconds !== null && item.durationSeconds > 0 && (
                       <Text style={styles.timelineDurationBadge}>
                         ⏱️ {item.durationSeconds}s
@@ -1170,83 +1178,57 @@ export const LeadDetailsScreen: React.FC = () => {
       </ScrollView>
 
       {/* Admin Reassign Modal */}
-      <Modal
+      <FormModal
         visible={reassignVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setReassignVisible(false)}
+        onClose={() => setReassignVisible(false)}
+        title="Reassign Lead"
+        onSave={handleReassignSubmit}
+        saveTitle="Save"
+        saveLoading={reassigning}
+        saveVariant="primary"
+        heightPercent={0.82}
+        maxHeightPixels={580}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalDialog}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Reassign Lead</Text>
-              <TouchableOpacity onPress={() => setReassignVisible(false)}>
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
+        <Text style={styles.modalDesc}>
+          Select an active agent to take ownership of {lead?.name}:
+        </Text>
+
+        {agents.map((ag) => (
+          <TouchableOpacity
+            key={ag.id}
+            style={[
+              styles.agentSelectRow,
+              selectedAgentId === ag.id && styles.agentSelectRowActive,
+            ]}
+            onPress={() => setSelectedAgentId(ag.id)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.agentAvatar}>
+              <Text style={styles.agentAvatarText}>{ag.name?.charAt(0) || 'U'}</Text>
             </View>
-
-            <Text style={styles.modalDesc}>
-              Select an active agent to take ownership of {lead.name}:
-            </Text>
-
-            <ScrollView style={[styles.agentsSelectScroll, { maxHeight: 180 }]}>
-              {agents.map((ag) => (
-                <TouchableOpacity
-                  key={ag.id}
-                  style={[
-                    styles.agentSelectRow,
-                    selectedAgentId === ag.id && styles.agentSelectRowActive,
-                  ]}
-                  onPress={() => setSelectedAgentId(ag.id)}
-                >
-                  <View style={styles.agentAvatar}>
-                    <Text style={styles.agentAvatarText}>{ag.name?.charAt(0) || 'U'}</Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 8 }}>
-                    <Text style={styles.agentSelectName}>{ag.name}</Text>
-                    <Text style={styles.agentSelectRole}>{ag.role} • {ag.email}</Text>
-                  </View>
-                  {selectedAgentId === ag.id && (
-                    <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <Text style={[styles.modalDesc, { marginTop: 12 }]}>Reason for reassignment (optional):</Text>
-            <TextInput
-              style={styles.reasonInput}
-              placeholder="e.g. Workload balancing, specialized product demo..."
-              placeholderTextColor={colors.textMuted}
-              value={reassignReason}
-              onChangeText={setReassignReason}
-              multiline
-              numberOfLines={3}
-            />
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => setReassignVisible(false)}
-                disabled={reassigning}
-              >
-                <Text style={styles.cancelModalBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmModalBtn}
-                onPress={handleReassignSubmit}
-                disabled={reassigning}
-              >
-                {reassigning ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.confirmModalBtnText}>Confirm Reassign</Text>
-                )}
-              </TouchableOpacity>
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text style={styles.agentSelectName}>{ag.name}</Text>
+              <Text style={styles.agentSelectRole}>{ag.role} • {ag.email}</Text>
             </View>
-          </View>
-        </View>
-      </Modal>
+            {selectedAgentId === ag.id && (
+              <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+            )}
+          </TouchableOpacity>
+        ))}
+
+        <Text style={[styles.modalDesc, { marginTop: 12, marginBottom: 6 }]}>
+          Reason for reassignment (optional):
+        </Text>
+        <TextInput
+          style={styles.reasonInput}
+          placeholder="e.g. Workload balancing, specialized product demo..."
+          placeholderTextColor={colors.textMuted}
+          value={reassignReason}
+          onChangeText={setReassignReason}
+          multiline
+          numberOfLines={2}
+        />
+      </FormModal>
 
       {/* Standard Modals */}
       <LogCallModal
@@ -1283,92 +1265,67 @@ export const LeadDetailsScreen: React.FC = () => {
       />
 
       {/* Manual Classification Override Modal */}
-      <Modal
+      <FormModal
         visible={overrideVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOverrideVisible(false)}
+        onClose={() => setOverrideVisible(false)}
+        title="Update Call Outcome"
+        onSave={handleSaveOverride}
+        saveTitle="Save"
+        saveLoading={savingOverride}
+        saveVariant="primary"
+        heightPercent={0.82}
+        maxHeightPixels={580}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalDialog}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Update Call Outcome</Text>
-              <TouchableOpacity onPress={() => setOverrideVisible(false)}>
-                <Ionicons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+        <Text style={styles.modalDesc}>
+          Select the correct business outcome for this call:
+        </Text>
 
-            <Text style={styles.modalDesc}>
-              Select the correct business outcome for this call:
-            </Text>
-
-            <View style={styles.classificationGrid}>
-              {[
-                { id: 'INTERESTED', label: 'Interested', color: '#10b981' },
-                { id: 'FOLLOW_UP', label: 'Follow-up Needed', color: '#f59e0b' },
-                { id: 'NOT_INTERESTED', label: 'Not Interested', color: '#ef4444' },
-                { id: 'WRONG_NUMBER', label: 'Wrong Number', color: '#6b7280' },
-                { id: 'JUNK', label: 'Junk / Spam', color: '#64748b' },
-                { id: 'SALE', label: 'Sale Closed', color: '#8b5cf6' },
-              ].map((cls) => {
-                const isSelected = selectedClassification === cls.id;
-                return (
-                  <TouchableOpacity
-                    key={cls.id}
-                    style={[
-                      styles.classificationOption,
-                      isSelected && { borderColor: cls.color, backgroundColor: cls.color + '15' },
-                    ]}
-                    onPress={() => setSelectedClassification(cls.id)}
-                  >
-                    <View style={[styles.colorDot, { backgroundColor: cls.color }]} />
-                    <Text
-                      style={[
-                        styles.classificationOptionText,
-                        isSelected && { color: cls.color, fontWeight: '700' },
-                      ]}
-                    >
-                      {cls.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={[styles.modalDesc, { marginTop: 12 }]}>Override notes / reason (optional):</Text>
-            <TextInput
-              style={styles.reasonInput}
-              placeholder="e.g. Customer requested callback..."
-              placeholderTextColor={colors.textMuted}
-              value={overrideNotes}
-              onChangeText={setOverrideNotes}
-              multiline
-              numberOfLines={2}
-            />
-
-            <View style={styles.modalActions}>
+        <View style={styles.classificationGrid}>
+          {[
+            { id: 'INTERESTED', label: 'Interested', color: '#10b981' },
+            { id: 'FOLLOW_UP', label: 'Follow-up Needed', color: '#f59e0b' },
+            { id: 'NOT_INTERESTED', label: 'Not Interested', color: '#ef4444' },
+            { id: 'WRONG_NUMBER', label: 'Wrong Number', color: '#6b7280' },
+            { id: 'JUNK', label: 'Junk / Spam', color: '#64748b' },
+            { id: 'SALE', label: 'Sale Closed', color: '#8b5cf6' },
+          ].map((cls) => {
+            const isSelected = selectedClassification === cls.id;
+            return (
               <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => setOverrideVisible(false)}
-                disabled={savingOverride}
+                key={cls.id}
+                style={[
+                  styles.classificationOption,
+                  isSelected && { borderColor: cls.color, backgroundColor: cls.color + '15' },
+                ]}
+                onPress={() => setSelectedClassification(cls.id)}
               >
-                <Text style={styles.cancelModalBtnText}>Cancel</Text>
+                <View style={[styles.colorDot, { backgroundColor: cls.color }]} />
+                <Text
+                  style={[
+                    styles.classificationOptionText,
+                    isSelected && { color: cls.color, fontWeight: '700' },
+                  ]}
+                >
+                  {cls.label}
+                </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmModalBtn}
-                onPress={handleSaveOverride}
-                disabled={savingOverride}
-              >
-                {savingOverride ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.confirmModalBtnText}>Save</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+            );
+          })}
         </View>
-      </Modal>
+
+        <Text style={[styles.modalDesc, { marginTop: 12, marginBottom: 6 }]}>
+          Override notes / reason (optional):
+        </Text>
+        <TextInput
+          style={styles.reasonInput}
+          placeholder="e.g. Customer requested callback..."
+          placeholderTextColor={colors.textMuted}
+          value={overrideNotes}
+          onChangeText={setOverrideNotes}
+          multiline
+          numberOfLines={2}
+        />
+      </FormModal>
       {/* End of Lead Details */}
     </SafeAreaView>
   );
@@ -1816,21 +1773,43 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(17, 24, 39, 0.5)',
     justifyContent: 'center',
-    padding: 16,
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  modalBackdropTouchable: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   modalDialog: {
-    backgroundColor: colors.surfaceCard,
-    borderRadius: 16,
-    padding: 16,
-    maxHeight: '80%',
+    backgroundColor: colors.surface,
+    borderRadius: spacing.borderRadius.lg,
+    padding: spacing.md,
+    width: '100%',
+    maxWidth: 440,
+    maxHeight: '90%',
+    alignSelf: 'center',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.sm,
+    flexShrink: 0,
   },
   modalTitle: {
     fontSize: 17,
@@ -1838,38 +1817,44 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   modalDesc: {
-    fontSize: 13,
+    fontSize: 12,
+    fontWeight: '600',
     color: colors.textSecondary,
-    marginBottom: 8,
+    marginBottom: spacing.xs,
   },
-  agentsSelectScroll: {
-    marginVertical: 4,
+  modalScrollBody: {
+    width: '100%',
+  },
+  modalScrollContent: {
+    paddingBottom: spacing.sm,
   },
   agentSelectRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
-    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: spacing.borderRadius.sm,
+    backgroundColor: colors.surfaceElevated,
+    marginBottom: 6,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 6,
   },
   agentSelectRowActive: {
-    borderColor: colors.primary,
     backgroundColor: colors.primaryLight,
+    borderColor: colors.primary,
   },
   agentAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   agentAvatarText: {
-    color: '#ffffff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
+    color: colors.primary,
   },
   agentSelectName: {
     fontSize: 13,
@@ -1879,45 +1864,56 @@ const styles = StyleSheet.create({
   agentSelectRole: {
     fontSize: 11,
     color: colors.textMuted,
+    marginTop: 1,
   },
   reasonInput: {
+    backgroundColor: colors.surfaceElevated,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 13,
+    borderRadius: spacing.borderRadius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
     color: colors.textPrimary,
-    backgroundColor: colors.surfaceElevated,
+    minHeight: 56,
     textAlignVertical: 'top',
-    minHeight: 60,
   },
-  modalActions: {
+  modalFooter: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 16,
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    flexShrink: 0,
   },
   cancelModalBtn: {
     flex: 1,
     paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: spacing.borderRadius.sm,
     borderWidth: 1,
     borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelModalBtnText: {
-    color: colors.textSecondary,
+    fontSize: 13,
     fontWeight: '600',
+    color: colors.textSecondary,
   },
   confirmModalBtn: {
     flex: 1,
     paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: spacing.borderRadius.sm,
     backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   confirmModalBtnText: {
-    color: '#ffffff',
+    fontSize: 13,
     fontWeight: '700',
+    color: '#ffffff',
   },
   cardHeaderRow: {
     flexDirection: 'row',

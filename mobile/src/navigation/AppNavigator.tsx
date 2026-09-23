@@ -2,6 +2,7 @@ import React from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { colors } from '../theme/colors';
+import { useAuth } from '../context/AuthContext';
 import { SplashScreen } from '../screens/splash/SplashScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { TabNavigator } from './TabNavigator';
@@ -9,6 +10,7 @@ import { LeadDetailsScreen } from '../screens/leads/LeadDetailsScreen';
 import { AttendanceHistoryScreen } from '../screens/attendance/AttendanceHistoryScreen';
 import { CallLogsScreen } from '../screens/calls/CallLogsScreen';
 import { SalesScreen } from '../screens/sales/SalesScreen';
+import { ConvertedLeadsScreen } from '../screens/sales/ConvertedLeadsScreen';
 import { AdminProjectsScreen } from '../screens/admin/AdminProjectsScreen';
 import { AdminUsersScreen } from '../screens/admin/AdminUsersScreen';
 import { AssignmentsScreen } from '../screens/admin/AssignmentsScreen';
@@ -17,6 +19,8 @@ import { AuditLogsScreen } from '../screens/admin/AuditLogsScreen';
 import { GoogleSheetsScreen } from '../screens/admin/GoogleSheetsScreen';
 import { FollowUpsScreen } from '../screens/followups/FollowUpsScreen';
 import { SettingsScreen } from '../screens/settings/SettingsScreen';
+import { AdminNotificationsScreen } from '../screens/admin/AdminNotificationsScreen';
+import { UserNotificationsScreen } from '../screens/home/UserNotificationsScreen';
 import { RootStackParamList } from '../types';
 import { navigationRef, resetToLogin, resetToMain } from './navigationService';
 export { navigationRef, resetToLogin, resetToMain };
@@ -33,6 +37,14 @@ const appNavTheme = {
     border: colors.border,
     primary: colors.primary,
   },
+};
+
+const NotificationsRouterScreen: React.FC = () => {
+  const { isAdmin } = useAuth();
+  if (isAdmin) {
+    return <AdminNotificationsScreen />;
+  }
+  return <UserNotificationsScreen />;
 };
 
 export const AppNavigator: React.FC = () => {
@@ -66,6 +78,11 @@ export const AppNavigator: React.FC = () => {
         <Stack.Screen
           name="Sales"
           component={SalesScreen}
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="ConvertedLeads"
+          component={ConvertedLeadsScreen}
           options={{ animation: 'slide_from_right' }}
         />
         <Stack.Screen
@@ -106,6 +123,11 @@ export const AppNavigator: React.FC = () => {
         <Stack.Screen
           name="Settings"
           component={SettingsScreen}
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="Notifications"
+          component={NotificationsRouterScreen}
           options={{ animation: 'slide_from_right' }}
         />
       </Stack.Navigator>

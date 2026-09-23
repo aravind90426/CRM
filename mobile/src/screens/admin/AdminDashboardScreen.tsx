@@ -87,7 +87,8 @@ export const AdminDashboardScreen: React.FC = () => {
       <MeqHeader
         rightMode="home"
         avatarInitial={avatarInitial}
-        onPressBell={() => navigation.navigate('AuditLogs' as any)}
+        onPressAvatar={() => navigation.navigate('Settings')}
+        onPressBell={() => navigation.navigate('Notifications' as any)}
       />
 
       <ScrollView
@@ -145,37 +146,63 @@ export const AdminDashboardScreen: React.FC = () => {
 
         {/* 2x2 Grid KPI Cards */}
         <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
+          <TouchableOpacity
+            style={styles.statCard}
+            activeOpacity={0.7}
+            onPress={() =>
+              navigation.navigate('Main' as any, {
+                screen: 'Leads',
+                params: {
+                  screen: 'LeadsList',
+                  params: { projectId: undefined, projectName: 'All Leads' },
+                },
+              } as any)
+            }
+          >
             <View style={styles.statHeader}>
               <IconTile name="people" variant="blue" size={36} iconSize={18} />
               <Text style={styles.statNumber}>{summary?.totalLeads ?? 0}</Text>
             </View>
             <Text style={styles.statLabel}>Total Leads</Text>
-          </View>
+          </TouchableOpacity>
 
-          <View style={styles.statCard}>
+          <TouchableOpacity
+            style={styles.statCard}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('ConvertedLeads')}
+          >
             <View style={styles.statHeader}>
               <IconTile name="trophy" variant="green" size={36} iconSize={18} />
               <Text style={styles.statNumber}>{summary?.convertedLeads ?? 0}</Text>
             </View>
-            <Text style={styles.statLabel}>Converted Deals</Text>
-          </View>
+            <Text style={styles.statLabel}>Converted Leads</Text>
+          </TouchableOpacity>
 
-          <View style={styles.statCard}>
+          <TouchableOpacity
+            style={styles.statCard}
+            activeOpacity={0.7}
+            onPress={() =>
+              navigation.navigate('CallLogs', { initialTab: 'TODAY' } as any)
+            }
+          >
             <View style={styles.statHeader}>
               <IconTile name="call" variant="purple" size={36} iconSize={18} />
               <Text style={styles.statNumber}>{summary?.callsToday ?? 0}</Text>
             </View>
             <Text style={styles.statLabel}>Calls Today ({connectedRate}%)</Text>
-          </View>
+          </TouchableOpacity>
 
-          <View style={styles.statCard}>
+          <TouchableOpacity
+            style={styles.statCard}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('AdminProjects')}
+          >
             <View style={styles.statHeader}>
               <IconTile name="briefcase" variant="orange" size={36} iconSize={18} />
               <Text style={styles.statNumber}>{summary?.activeProjects ?? projects.length}</Text>
             </View>
             <Text style={styles.statLabel}>Active Projects</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Quick Admin Actions */}
@@ -249,13 +276,21 @@ export const AdminDashboardScreen: React.FC = () => {
                 <View style={styles.projectStatItem}>
                   <Ionicons name="people-outline" size={13} color={colors.textSecondary} />
                   <Text style={styles.projectStatText}>
-                    {p.assignedLeadsCount ?? 0} Leads
+                    {p.assignedLeadsCount ?? p.totalLeads ?? 0} Leads
                   </Text>
                 </View>
 
                 <TouchableOpacity
                   style={styles.viewLeadsBtn}
-                  onPress={() => navigation.navigate('Main' as any, { screen: 'Leads', params: { projectId: p.id, projectName: p.name } } as any)}
+                  onPress={() =>
+                    navigation.navigate('Main' as any, {
+                      screen: 'Leads',
+                      params: {
+                        screen: 'LeadsList',
+                        params: { projectId: p.id, projectName: p.name },
+                      },
+                    } as any)
+                  }
                 >
                   <Text style={styles.viewLeadsBtnText}>View Leads ›</Text>
                 </TouchableOpacity>
@@ -276,7 +311,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
-    paddingBottom: spacing.xl,
+    paddingBottom: 100,
   },
   greetingRow: {
     flexDirection: 'row',

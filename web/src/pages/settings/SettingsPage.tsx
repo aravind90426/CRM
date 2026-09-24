@@ -11,15 +11,17 @@ import {
   FileSpreadsheet,
   Clock,
   ArrowRight,
+  Send,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { authApi, sheetsApi } from '../../api';
+import { authApi, sheetsApi, shiftsApi } from '../../api';
 import { getErrorMessage } from '../../api/client';
-import { GoogleSheetsSyncLog, GoogleSheetsSyncSummary } from '../../types';
+import { GoogleSheetsSyncLog, GoogleSheetsSyncSummary, ShiftChangeRequest, ShiftOption } from '../../types';
+import { Modal } from '../../components/common/Modal';
 
 export const SettingsPage: React.FC = () => {
-  const { user, isAdmin, logout } = useAuth();
+  const { user, isAdmin, logout, refreshUser } = useAuth();
   const navigate = useNavigate();
 
   const [currentPassword, setCurrentPassword] = useState('');
@@ -29,14 +31,37 @@ export const SettingsPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Shift Change Request state
+  const [shiftRequests, setShiftRequests] = useState<ShiftChangeRequest[]>([]);
+  const [availableShifts, setAvailableShifts] = useState<ShiftOption[]>([]);
+  const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+  const [selectedShift, setSelectedShift] = useState('SHIFT_0930_1830');
+  const [shiftReason, setShiftReason] = useState('');
+  const [shiftModalError, setShiftModalError] = useState<string | null>(null);
+  const [isShiftSubmitting, setIsShiftSubmitting] = useState(false);
+
   // Google Sheets Sync status (Admin only)
   const [syncStatus, setSyncStatus] = useState<GoogleSheetsSyncLog | null>(null);
 
   useEffect(() => {
+    loadShiftData();
     if (isAdmin) {
       loadSyncStatus();
     }
   }, [isAdmin]);
+
+  const loadShiftData = async () => {
+    try {
+      const [shifts, myRequests] = await Promise.all([
+        shiftsApi.getAvailableShifts(),
+        shiftsApi.getMyShiftRequests(),
+      ]);
+      setAvailableShifts(shifts || []);
+      setShiftRequests(myRequests || []);
+    } catch (e) {
+      // Non-blocking
+    }
+  };
 
   const loadSyncStatus = async () => {
     try {
@@ -165,6 +190,146 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Work Shift Card */}
+      <div className="card">
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Clock size={18} style={{ color: 'var(--primary)' }} />
+            <div className="card-title">Work Shift</div>
+          </div>
+          <button
+            id="request-shift-change-btn"
+            onClick={() => {
+              setShiftModalError(null);
+              setIsShiftModalOpen(true);
+            }}
+            disabled={shiftRequests.some((r) => r.status === 'PENDING')}
+            className="btn btn-outline btn-sm"
+            style={{ fontSize: '0.8125rem' }}
+          >
+            {shiftRequests.some((r) => r.status === 'PENDING') ? 'Shift Change Pending' : 'Request Shift Change'}
+          </button>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '12px' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Current Assigned Shift</div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>{user?.shiftDisplayName || '10:00 AM – 07:00 PM'}</span>
+            </div>
+          </div>
+
+          {shiftRequests.length > 0 && (
+            <div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Latest Request Status</div>
+              <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  className={`badge ${
+                    shiftRequests[0].status === 'APPROVED'
+                      ? 'badge-success'
+                      : shiftRequests[0].status === 'PENDING'
+                      ? 'badge-warning'
+                      : 'badge-danger'
+                  }`}
+                >
+                  {shiftRequests[0].status === 'PENDING' ? 'Pending Admin Approval' : shiftRequests[0].status}
+                </span>
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                  (Target: {shiftRequests[0].requestedShiftDisplayName})
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {shiftRequests.some((r) => r.status === 'PENDING') && (
+          <div style={{ marginTop: '14px', padding: '10px 14px', background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.8125rem', color: '#fde047' }}>
+            A shift change request to <strong>{shiftRequests.find((r) => r.status === 'PENDING')?.requestedShiftDisplayName}</strong> is currently pending administrator review.
+          </div>
+        )}
+      </div>
+
+      {/* Request Shift Change Modal */}
+      <Modal
+        isOpen={isShiftModalOpen}
+        onClose={() => setIsShiftModalOpen(false)}
+        title="Request Shift Change"
+      >
+        {shiftModalError && (
+          <div style={{ padding: '10px 14px', background: 'var(--danger-light)', color: '#fca5a5', borderRadius: 'var(--radius-md)', marginBottom: '16px', fontSize: '0.8125rem' }}>
+            {shiftModalError}
+          </div>
+        )}
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setShiftModalError(null);
+            setIsShiftSubmitting(true);
+            try {
+              await shiftsApi.createShiftChangeRequest({
+                requestedShift: selectedShift,
+                reason: shiftReason || undefined,
+              });
+              setIsShiftModalOpen(false);
+              setShiftReason('');
+              await loadShiftData();
+              if (refreshUser) await refreshUser();
+            } catch (err) {
+              setShiftModalError(getErrorMessage(err));
+            } finally {
+              setIsShiftSubmitting(false);
+            }
+          }}
+        >
+          <div className="form-group">
+            <label className="form-label">Current Shift</label>
+            <input
+              type="text"
+              className="form-input"
+              value={user?.shiftDisplayName || '10:00 AM – 07:00 PM'}
+              disabled
+              style={{ opacity: 0.7 }}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Requested Work Shift *</label>
+            <select
+              id="requested-shift-select"
+              className="form-select"
+              value={selectedShift}
+              onChange={(e) => setSelectedShift(e.target.value)}
+              required
+            >
+              {availableShifts.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.displayName} {s.isDefault ? '(Default)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Reason for Request (Optional)</label>
+            <textarea
+              id="shift-reason-input"
+              className="form-input"
+              rows={3}
+              placeholder="e.g. Requesting morning shift to align with commute schedule..."
+              value={shiftReason}
+              onChange={(e) => setShiftReason(e.target.value)}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+            <button type="button" onClick={() => setIsShiftModalOpen(false)} className="btn btn-secondary btn-sm">Cancel</button>
+            <button id="submit-shift-request-btn" type="submit" className="btn btn-primary btn-sm" disabled={isShiftSubmitting}>
+              {isShiftSubmitting ? 'Submitting...' : 'Submit Request'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* ADMIN-ONLY GOOGLE SHEETS SYNC SECTION */}
       {isAdmin && (

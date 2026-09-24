@@ -5,6 +5,10 @@ export interface User {
   phone?: string;
   role: string; // ROLE_ADMIN, ROLE_USER
   status: 'ACTIVE' | 'INACTIVE';
+  shift?: string;
+  shiftDisplayName?: string;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
   createdAt?: string;
 }
 
@@ -25,6 +29,10 @@ export interface Project {
   description?: string;
   status: 'ACTIVE' | 'INACTIVE';
   createdAt?: string;
+  totalLeads?: number;
+  assignedLeads?: number;
+  assignedLeadsCount?: number;
+  convertedLeads?: number;
 }
 
 export interface LeadSummary {
@@ -267,3 +275,50 @@ export interface ApiResponse<T> {
   message: string;
   data: T;
 }
+
+export interface ShiftOption {
+  id: string;
+  displayName: string;
+  startTime: string;
+  endTime: string;
+  isDefault: boolean;
+}
+
+export interface ShiftChangeRequest {
+  id: number;
+  userId: number;
+  userName: string;
+  userEmail: string;
+  currentShift: string;
+  currentShiftDisplayName: string;
+  requestedShift: string;
+  requestedShiftDisplayName: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reason?: string;
+  adminNotes?: string;
+  requestedAt: string;
+  reviewedAt?: string;
+  reviewedById?: number;
+  reviewedByName?: string;
+}
+
+export interface AttendanceRecord {
+  id?: number;
+  userId?: number;
+  userName?: string;
+  date: string;
+  clockInTime?: string;
+  clockOutTime?: string;
+  durationMinutes: number;
+  status: string;
+  notes?: string;
+  clockedIn: boolean;
+  clockedOut: boolean;
+  shift?: string;
+  shiftDisplayName?: string;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
+  checkInOverdue?: boolean;
+  serverTime?: string;
+}
+

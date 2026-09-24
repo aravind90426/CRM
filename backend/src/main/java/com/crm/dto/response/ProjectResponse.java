@@ -19,5 +19,6 @@ public class ProjectResponse {
     private LocalDateTime createdAt;
     private long totalLeads;
     private long assignedLeads;
+    private long assignedLeadsCount;
     private long convertedLeads;
 }

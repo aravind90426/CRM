@@ -54,7 +54,7 @@ public class UserControllerTest extends BaseControllerTest {
     @DisplayName("POST /api/v1/users should validate creation, duplicate emails, and RBAC")
     void testCreateUserFlow() throws Exception {
         // Validation failure (blank name and email)
-        UserCreateRequest invalid = new UserCreateRequest("", "", "", "password123", "USER", "ACTIVE");
+        UserCreateRequest invalid = new UserCreateRequest("", "", "", "password123", "USER", "ACTIVE", "SHIFT_1000_1900");
         mockMvc.perform(post("/api/v1/users")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -62,7 +62,7 @@ public class UserControllerTest extends BaseControllerTest {
                 .andExpect(status().isBadRequest());
 
         // Duplicate email (409 Conflict)
-        UserCreateRequest duplicate = new UserCreateRequest("Duplicate Admin", "admin@crm.com", "+91 99999 88888", "pass123", "ADMIN", "ACTIVE");
+        UserCreateRequest duplicate = new UserCreateRequest("Duplicate Admin", "admin@crm.com", "+91 99999 88888", "pass123", "ADMIN", "ACTIVE", "SHIFT_1000_1900");
         mockMvc.perform(post("/api/v1/users")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -70,7 +70,7 @@ public class UserControllerTest extends BaseControllerTest {
                 .andExpect(status().isConflict());
 
         // Agent attempt forbidden (403)
-        UserCreateRequest validReq = new UserCreateRequest("New Agent", "newagent@crm.com", "+91 99999 77777", "pass1234", "USER", "ACTIVE");
+        UserCreateRequest validReq = new UserCreateRequest("New Agent", "newagent@crm.com", "+91 99999 77777", "pass1234", "USER", "ACTIVE", "SHIFT_1000_1900");
         mockMvc.perform(post("/api/v1/users")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + agentToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -101,7 +101,7 @@ public class UserControllerTest extends BaseControllerTest {
                 .andExpect(status().isForbidden());
 
         // Admin update user
-        UserUpdateRequest updateReq = new UserUpdateRequest("Updated Admin Name", "+91 98765 00001", "ADMIN", "ACTIVE");
+        UserUpdateRequest updateReq = new UserUpdateRequest("Updated Admin Name", "+91 98765 00001", "ADMIN", "ACTIVE", "SHIFT_1000_1900");
         mockMvc.perform(put("/api/v1/users/1")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)

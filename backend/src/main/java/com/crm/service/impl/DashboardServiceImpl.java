@@ -46,7 +46,7 @@ public class DashboardServiceImpl implements DashboardService {
         long unassignedLeads = totalLeads - assignedLeads;
 
         long totalCalls = callRepository.count();
-        long connectedCalls = callRepository.countByCallStatus("CONNECTED");
+        long connectedCalls = callRepository.countTotalConnectedCalls();
         long missedCalls = callRepository.countByCallStatus("MISSED");
         long noAnswerCalls = callRepository.countByCallStatus("NO_ANSWER");
         long busyCalls = callRepository.countByCallStatus("BUSY");
@@ -116,7 +116,7 @@ public class DashboardServiceImpl implements DashboardService {
         LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
 
         long myCallsToday = callRepository.countByUserIdAndCreatedAtBetween(userId, startOfDay, endOfDay);
-        long myConnectedCallsToday = callRepository.countByUserIdAndCallStatusAndCreatedAtBetween(userId, "CONNECTED", startOfDay, endOfDay);
+        long myConnectedCallsToday = callRepository.countConnectedCallsForUserToday(userId, startOfDay, endOfDay);
 
         long myPendingFollowUpsToday = followUpRepository.countByUserIdAndStatusAndScheduledTimeBetween(userId, "PENDING", startOfDay, endOfDay);
         long myOverdueFollowUps = followUpRepository.countByUserIdAndStatusAndScheduledTimeLessThan(userId, "PENDING", LocalDateTime.now());

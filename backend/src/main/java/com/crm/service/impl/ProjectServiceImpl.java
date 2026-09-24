@@ -130,6 +130,20 @@ public class ProjectServiceImpl implements ProjectService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProjectResponse> getUserAssignedProjects(Long userId) {
+        List<Project> projects = projectRepository.findActiveProjectsAssignedToUser(userId);
+        return projects.stream()
+                .map(p -> {
+                    long userAssignedCount = leadRepository.countAssignedToUserInProject(userId, p.getId());
+                    long convertedLeads = salesRepository.countByProjectId(p.getId());
+                    return projectMapper.toResponse(p, userAssignedCount, userAssignedCount, convertedLeads);
+                })
+                .filter(p -> p.getAssignedLeadsCount() > 0)
+                .toList();
+    }
+
     private ProjectResponse getProjectStatsResponse(Project project) {
         long totalLeads = leadRepository.countByProjectId(project.getId());
         long convertedLeads = salesRepository.countByProjectId(project.getId());

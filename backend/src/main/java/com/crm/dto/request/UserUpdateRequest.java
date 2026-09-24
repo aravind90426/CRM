@@ -15,4 +15,5 @@ public class UserUpdateRequest {
     private String phone;
     private String role;
     private String status;
+    private String shift;
 }

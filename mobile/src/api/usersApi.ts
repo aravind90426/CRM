@@ -24,6 +24,7 @@ export const usersApi = {
     phone?: string;
     password: string;
     role: string;
+    shift?: string;
   }): Promise<User> => {
     const res = await apiClient.post<ApiResponse<User>>('/users', data);
     return res.data.data;
@@ -31,7 +32,7 @@ export const usersApi = {
 
   updateUser: async (
     id: number,
-    data: { name: string; phone?: string; role?: string }
+    data: { name: string; phone?: string; role?: string; shift?: string }
   ): Promise<User> => {
     const res = await apiClient.put<ApiResponse<User>>(`/users/${id}`, data);
     return res.data.data;

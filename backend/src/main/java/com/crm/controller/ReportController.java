@@ -73,4 +73,38 @@ public class ReportController {
 
         return ResponseEntity.ok(ApiResponse.ok(reportService.getSalesReport(start, end)));
     }
+
+    @GetMapping("/dashboard")
+    public ResponseEntity<ApiResponse<com.crm.dto.response.AdminAnalyticsDashboardResponse>> getAdminAnalyticsDashboard(
+            @RequestParam(required = false) Long projectId,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String leadStatus,
+            @RequestParam(required = false) String callStatus,
+            @RequestParam(required = false) String callDirection,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+
+        com.crm.dto.response.AdminAnalyticsDashboardResponse dashboard = reportService.getAdminAnalyticsDashboard(projectId, userId, leadStatus, callStatus, callDirection, start, end);
+        return ResponseEntity.ok(ApiResponse.ok(dashboard));
+    }
+
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportReportCsv(
+            @RequestParam(defaultValue = "LEADS") String type,
+            @RequestParam(required = false) Long projectId,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String leadStatus,
+            @RequestParam(required = false) String callStatus,
+            @RequestParam(required = false) String callDirection,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+
+        byte[] csvData = reportService.exportReportCsv(type, projectId, userId, leadStatus, callStatus, callDirection, start, end);
+        String filename = "report_" + type.toLowerCase() + "_" + System.currentTimeMillis() + ".csv";
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, "text/csv; charset=UTF-8")
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .body(csvData);
+    }
 }

@@ -11,6 +11,8 @@ import {
   Phone,
   CheckCircle2,
   Trash2,
+  Edit2,
+  Clock,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usersApi } from '../../api';
@@ -35,9 +37,21 @@ export const UsersPage: React.FC = () => {
     phone: '',
     password: '',
     role: 'ROLE_USER',
+    shift: 'SHIFT_1000_1900',
   });
   const [modalError, setModalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Edit User Modal
+  const [editUser, setEditUser] = useState<User | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    phone: '',
+    role: 'ROLE_USER',
+    shift: 'SHIFT_1000_1900',
+  });
+  const [editModalError, setEditModalError] = useState<string | null>(null);
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
   // Delete User Confirmation Modal
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<User | null>(null);
@@ -102,12 +116,39 @@ export const UsersPage: React.FC = () => {
     try {
       await usersApi.createUser(formData);
       setIsModalOpen(false);
-      setFormData({ name: '', email: '', phone: '', password: '', role: 'ROLE_USER' });
+      setFormData({ name: '', email: '', phone: '', password: '', role: 'ROLE_USER', shift: 'SHIFT_1000_1900' });
       loadUsers();
     } catch (err) {
       setModalError(getErrorMessage(err));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const openEditModal = (u: User) => {
+    setEditUser(u);
+    setEditFormData({
+      name: u.name,
+      phone: u.phone || '',
+      role: u.role || 'ROLE_USER',
+      shift: u.shift || 'SHIFT_1000_1900',
+    });
+    setEditModalError(null);
+  };
+
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editUser) return;
+    setEditModalError(null);
+    setIsEditSubmitting(true);
+    try {
+      await usersApi.updateUser(editUser.id, editFormData);
+      setEditUser(null);
+      loadUsers();
+    } catch (err) {
+      setEditModalError(getErrorMessage(err));
+    } finally {
+      setIsEditSubmitting(false);
     }
   };
 
@@ -119,7 +160,7 @@ export const UsersPage: React.FC = () => {
             User Management
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginTop: '2px' }}>
-            Provision employee access, manage roles, and review sales rep statuses.
+            Provision employee access, manage roles, work shifts, and review statuses.
           </p>
         </div>
 
@@ -176,6 +217,7 @@ export const UsersPage: React.FC = () => {
                   <th>Employee Name</th>
                   <th>Contact Information</th>
                   <th>System Role</th>
+                  <th>Work Shift</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -197,6 +239,12 @@ export const UsersPage: React.FC = () => {
                       </span>
                     </td>
                     <td>
+                      <span className="badge badge-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
+                        <Clock size={11} />
+                        <span>{u.shiftDisplayName || '10:00 AM – 07:00 PM'}</span>
+                      </span>
+                    </td>
+                    <td>
                       <span className={`badge ${u.status === 'ACTIVE' ? 'badge-success' : 'badge-danger'}`}>
                         <span className="badge-dot" />
                         {u.status}
@@ -204,6 +252,15 @@ export const UsersPage: React.FC = () => {
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button
+                          id={`edit-user-${u.id}-btn`}
+                          onClick={() => openEditModal(u)}
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '6px 8px' }}
+                          title="Edit User and Work Shift"
+                        >
+                          <Edit2 size={13} />
+                        </button>
                         <button
                           id={`toggle-user-${u.id}-btn`}
                           onClick={() => handleToggleStatus(u)}
@@ -297,6 +354,21 @@ export const UsersPage: React.FC = () => {
           </div>
 
           <div className="form-group">
+            <label className="form-label">Work Shift *</label>
+            <select
+              id="new-user-shift"
+              className="form-select"
+              value={formData.shift}
+              onChange={(e) => setFormData({ ...formData, shift: e.target.value })}
+              required
+            >
+              <option value="SHIFT_1000_1900">10:00 AM – 07:00 PM (Default)</option>
+              <option value="SHIFT_0900_1800">09:00 AM – 06:00 PM</option>
+              <option value="SHIFT_0930_1830">09:30 AM – 06:30 PM</option>
+            </select>
+          </div>
+
+          <div className="form-group">
             <label className="form-label">Initial Password *</label>
             <input
               id="new-user-password"
@@ -314,6 +386,79 @@ export const UsersPage: React.FC = () => {
             <button type="button" onClick={() => setIsModalOpen(false)} className="btn btn-secondary btn-sm">Cancel</button>
             <button id="submit-create-user-btn" type="submit" className="btn btn-primary btn-sm" disabled={isSubmitting}>
               {isSubmitting ? 'Creating...' : 'Create Account'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit User Modal */}
+      <Modal
+        isOpen={Boolean(editUser)}
+        onClose={() => setEditUser(null)}
+        title={`Edit User: ${editUser?.name}`}
+      >
+        {editModalError && (
+          <div style={{ padding: '10px 14px', background: 'var(--danger-light)', color: '#fca5a5', borderRadius: 'var(--radius-md)', marginBottom: '16px', fontSize: '0.8125rem' }}>
+            {editModalError}
+          </div>
+        )}
+        <form onSubmit={handleEditUser}>
+          <div className="form-group">
+            <label className="form-label">Full Name *</label>
+            <input
+              id="edit-user-name"
+              type="text"
+              className="form-input"
+              value={editFormData.name}
+              onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+              required
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="form-group">
+              <label className="form-label">Phone</label>
+              <input
+                type="text"
+                className="form-input"
+                value={editFormData.phone}
+                onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Role *</label>
+              <select
+                id="edit-user-role"
+                className="form-select"
+                value={editFormData.role}
+                onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })}
+                required
+              >
+                <option value="ROLE_USER">Sales Agent (Standard)</option>
+                <option value="ROLE_ADMIN">Administrator (Full Access)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Work Shift *</label>
+            <select
+              id="edit-user-shift"
+              className="form-select"
+              value={editFormData.shift}
+              onChange={(e) => setEditFormData({ ...editFormData, shift: e.target.value })}
+              required
+            >
+              <option value="SHIFT_1000_1900">10:00 AM – 07:00 PM</option>
+              <option value="SHIFT_0900_1800">09:00 AM – 06:00 PM</option>
+              <option value="SHIFT_0930_1830">09:30 AM – 06:30 PM</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+            <button type="button" onClick={() => setEditUser(null)} className="btn btn-secondary btn-sm">Cancel</button>
+            <button id="submit-edit-user-btn" type="submit" className="btn btn-primary btn-sm" disabled={isEditSubmitting}>
+              {isEditSubmitting ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>

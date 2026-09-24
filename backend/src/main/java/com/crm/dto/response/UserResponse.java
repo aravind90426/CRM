@@ -18,6 +18,10 @@ public class UserResponse {
     private String phone;
     private String role;
     private String status;
+    private String shift;
+    private String shiftDisplayName;
+    private java.time.LocalTime shiftStartTime;
+    private java.time.LocalTime shiftEndTime;
     private LocalDateTime createdAt;
     private long activeLeadsCount;
     private long totalCallsCount;

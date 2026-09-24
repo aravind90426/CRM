@@ -15,5 +15,8 @@ public interface LeadService {
     LeadDetailResponse getLeadDetails(Long id, Long currentUserId, boolean isAdmin);
     Page<LeadSummaryResponse> searchLeads(Long projectId, String status, String outcome, String search,
                                          Long currentUserId, boolean isAdmin, Pageable pageable);
+    Page<LeadSummaryResponse> searchLeads(Long projectId, String status, String outcome, String search,
+                                         Boolean assignedToMe, Long assignedUserId,
+                                         Long currentUserId, boolean isAdmin, Pageable pageable);
     void deleteLead(Long id, Long currentUserId);
 }

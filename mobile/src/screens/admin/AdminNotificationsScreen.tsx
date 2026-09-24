@@ -20,9 +20,10 @@ import { Card } from '../../components/common/Card';
 import { LoadingState } from '../../components/common/LoadingState';
 import { EmptyState } from '../../components/common/EmptyState';
 import { notificationApi } from '../../api/notificationApi';
+import { shiftApi } from '../../api/shiftApi';
 import { AdminNotification } from '../../types';
 
-type FilterType = 'ALL' | 'PERMISSIONS' | 'ASSIGNMENTS' | 'SYSTEM';
+type FilterType = 'ALL' | 'SHIFTS' | 'PERMISSIONS' | 'ASSIGNMENTS' | 'SYSTEM';
 
 export const AdminNotificationsScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -95,8 +96,48 @@ export const AdminNotificationsScreen: React.FC = () => {
     );
   };
 
+  const handleReviewShiftChange = async (
+    item: AdminNotification,
+    decision: 'APPROVED' | 'REJECTED'
+  ) => {
+    if (!item.referenceId) return;
+
+    const actionText = decision === 'APPROVED' ? 'approve' : 'reject';
+    Alert.alert(
+      `${decision === 'APPROVED' ? 'Approve' : 'Reject'} Shift Change`,
+      `Are you sure you want to ${actionText} this shift change request?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: decision === 'APPROVED' ? 'Approve' : 'Reject',
+          style: decision === 'REJECTED' ? 'destructive' : 'default',
+          onPress: async () => {
+            setProcessingId(item.id);
+            try {
+              await shiftApi.reviewShiftChangeRequest(item.referenceId!, {
+                status: decision,
+                adminNotes: `Processed from Admin Notifications`,
+              });
+              setNotifications((prev) =>
+                prev.map((n) =>
+                  n.id === item.id ? { ...n, status: decision, read: true } : n
+                )
+              );
+              Alert.alert('Success', `Shift change request has been ${decision.toLowerCase()}.`);
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Unable to process shift change request.');
+            } finally {
+              setProcessingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const filteredNotifications = notifications.filter((item) => {
     if (activeFilter === 'ALL') return true;
+    if (activeFilter === 'SHIFTS') return item.type === 'SHIFT_CHANGE_REQUEST';
     if (activeFilter === 'PERMISSIONS') return item.type === 'PERMISSION_REQUEST';
     if (activeFilter === 'ASSIGNMENTS')
       return (
@@ -126,6 +167,8 @@ export const AdminNotificationsScreen: React.FC = () => {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
+      case 'SHIFT_CHANGE_REQUEST':
+        return { name: 'time', variant: 'purple' as const };
       case 'PERMISSION_REQUEST':
         return { name: 'shield-checkmark', variant: 'orange' as const };
       case 'LEAD_ASSIGNMENT':
@@ -142,6 +185,8 @@ export const AdminNotificationsScreen: React.FC = () => {
   const renderItem = ({ item }: { item: AdminNotification }) => {
     const iconConfig = getNotificationIcon(item.type);
     const isPermission = item.type === 'PERMISSION_REQUEST';
+    const isShift = item.type === 'SHIFT_CHANGE_REQUEST';
+    const isActionable = isPermission || isShift;
     const isPending = item.status === 'PENDING';
     const isProcessing = processingId === item.id;
 
@@ -167,7 +212,7 @@ export const AdminNotificationsScreen: React.FC = () => {
             </View>
           </View>
 
-          {isPermission && (
+          {isActionable && (
             <View
               style={[
                 styles.statusBadge,
@@ -200,7 +245,7 @@ export const AdminNotificationsScreen: React.FC = () => {
         </View>
 
         {/* Clean, separated action buttons at bottom */}
-        {isPermission && isPending && (
+        {isActionable && isPending && (
           <View style={styles.actionsFooter}>
             {isProcessing ? (
               <View style={styles.processingRow}>
@@ -211,7 +256,11 @@ export const AdminNotificationsScreen: React.FC = () => {
               <View style={styles.actionButtonsRow}>
                 <TouchableOpacity
                   style={styles.rejectBtn}
-                  onPress={() => handleReviewPermission(item, 'REJECTED')}
+                  onPress={() =>
+                    isShift
+                      ? handleReviewShiftChange(item, 'REJECTED')
+                      : handleReviewPermission(item, 'REJECTED')
+                  }
                   activeOpacity={0.7}
                 >
                   <Ionicons name="close-circle-outline" size={16} color="#EF4444" />
@@ -220,7 +269,11 @@ export const AdminNotificationsScreen: React.FC = () => {
 
                 <TouchableOpacity
                   style={styles.approveBtn}
-                  onPress={() => handleReviewPermission(item, 'APPROVED')}
+                  onPress={() =>
+                    isShift
+                      ? handleReviewShiftChange(item, 'APPROVED')
+                      : handleReviewPermission(item, 'APPROVED')
+                  }
                   activeOpacity={0.7}
                 >
                   <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
@@ -239,13 +292,13 @@ export const AdminNotificationsScreen: React.FC = () => {
       <MeqHeader
         showLogo={false}
         title="Admin Notifications"
-        subtitle="Approvals, lead assignments & system alerts"
+        subtitle="Approvals, shift requests & system alerts"
         onBack={() => navigation.goBack()}
       />
 
       {/* Filter Tabs */}
       <View style={styles.filterRow}>
-        {(['ALL', 'PERMISSIONS', 'ASSIGNMENTS', 'SYSTEM'] as FilterType[]).map(
+        {(['ALL', 'SHIFTS', 'PERMISSIONS', 'ASSIGNMENTS', 'SYSTEM'] as FilterType[]).map(
           (tab) => {
             const isActive = activeFilter === tab;
             return (

@@ -18,4 +18,8 @@ public class JwtAuthResponse {
     private String email;
     private String role;
     private String status;
+    private String shift;
+    private String shiftDisplayName;
+    private String shiftStartTime;
+    private String shiftEndTime;
 }

@@ -24,4 +24,10 @@ public class AttendanceResponse {
     private String notes;
     private boolean clockedIn;
     private boolean clockedOut;
+    private String shift;
+    private String shiftDisplayName;
+    private java.time.LocalTime shiftStartTime;
+    private java.time.LocalTime shiftEndTime;
+    private boolean checkInOverdue;
+    private LocalDateTime serverTime;
 }

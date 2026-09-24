@@ -63,6 +63,10 @@ public interface LeadRepository extends JpaRepository<Lead, Long> {
            "(SELECT a.lead.id FROM LeadAssignment a WHERE a.user.id = :userId AND a.isActive = true)")
     long countAssignedToUser(@Param("userId") Long userId);
 
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.project.id = :projectId AND l.id IN " +
+           "(SELECT a.lead.id FROM LeadAssignment a WHERE a.user.id = :userId AND a.isActive = true)")
+    long countAssignedToUserInProject(@Param("userId") Long userId, @Param("projectId") Long projectId);
+
     @Query("SELECT COUNT(l) FROM Lead l WHERE l.businessOutcome = :outcome AND l.id IN " +
            "(SELECT a.lead.id FROM LeadAssignment a WHERE a.user.id = :userId AND a.isActive = true)")
     long countOutcomeForUser(@Param("userId") Long userId, @Param("outcome") String outcome);

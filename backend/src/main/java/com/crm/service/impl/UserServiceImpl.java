@@ -71,6 +71,10 @@ public class UserServiceImpl implements UserService {
                 request.getName()
         );
 
+        com.crm.model.WorkShift workShift = (request.getShift() != null && !request.getShift().isBlank())
+                ? com.crm.model.WorkShift.fromString(request.getShift())
+                : com.crm.model.WorkShift.SHIFT_1000_1900;
+
         User user = User.builder()
                 .name(request.getName())
                 .email(request.getEmail().toLowerCase().trim())
@@ -79,12 +83,13 @@ public class UserServiceImpl implements UserService {
                 .firebaseUid(firebaseUid)
                 .role(role)
                 .status(request.getStatus() != null ? request.getStatus().toUpperCase() : "ACTIVE")
+                .shift(workShift)
                 .build();
 
         User saved = userRepository.save(user);
 
         auditService.logAction(currentUserId, "User", saved.getId(), "CREATE", null,
-                "Name: " + saved.getName() + ", Role: " + saved.getRole().getName());
+                "Name: " + saved.getName() + ", Role: " + saved.getRole().getName() + ", Shift: " + saved.getShift().getDisplayName());
 
         return userMapper.toResponse(saved, 0, 0);
     }
@@ -95,7 +100,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
 
-        String oldDetails = "Name: " + user.getName() + ", Role: " + user.getRole().getName() + ", Status: " + user.getStatus();
+        String oldDetails = "Name: " + user.getName() + ", Role: " + user.getRole().getName() + ", Status: " + user.getStatus() + ", Shift: " + (user.getShift() != null ? user.getShift().getDisplayName() : "N/A");
 
         user.setName(request.getName());
         user.setPhone(request.getPhone());
@@ -115,9 +120,13 @@ public class UserServiceImpl implements UserService {
             user.setStatus(request.getStatus().toUpperCase());
         }
 
+        if (request.getShift() != null && !request.getShift().isBlank()) {
+            user.setShift(com.crm.model.WorkShift.fromString(request.getShift()));
+        }
+
         User updated = userRepository.save(user);
 
-        String newDetails = "Name: " + updated.getName() + ", Role: " + updated.getRole().getName() + ", Status: " + updated.getStatus();
+        String newDetails = "Name: " + updated.getName() + ", Role: " + updated.getRole().getName() + ", Status: " + updated.getStatus() + ", Shift: " + (updated.getShift() != null ? updated.getShift().getDisplayName() : "N/A");
         auditService.logAction(currentUserId, "User", updated.getId(), "UPDATE", oldDetails, newDetails);
 
         long activeLeads = leadAssignmentRepository.countByUserIdAndIsActiveTrue(updated.getId());

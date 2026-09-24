@@ -79,6 +79,13 @@ export const LeadsListPage: React.FC = () => {
   }, [isAdmin]);
 
   useEffect(() => {
+    const p = searchParams.get('projectId');
+    setSelectedProjectId(p ? Number(p) : null);
+    const s = searchParams.get('status');
+    if (s) setStatusFilter(s);
+  }, [searchParams]);
+
+  useEffect(() => {
     loadLeads();
   }, [selectedProjectId, currentPage, statusFilter, outcomeFilter]);
 

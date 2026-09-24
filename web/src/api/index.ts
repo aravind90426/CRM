@@ -152,11 +152,11 @@ export const usersApi = {
       content: data?.content || [],
     };
   },
-  createUser: async (data: { name: string; email: string; phone?: string; password: string; role: string }): Promise<User> => {
+  createUser: async (data: { name: string; email: string; phone?: string; password: string; role: string; shift?: string }): Promise<User> => {
     const res = await apiClient.post<ApiResponse<User>>('/users', data);
     return res.data.data;
   },
-  updateUser: async (id: number, data: { name: string; phone?: string; role?: string }): Promise<User> => {
+  updateUser: async (id: number, data: { name: string; phone?: string; role?: string; shift?: string }): Promise<User> => {
     const res = await apiClient.put<ApiResponse<User>>(`/users/${id}`, data);
     return res.data.data;
   },
@@ -166,6 +166,33 @@ export const usersApi = {
   },
   deleteUser: async (id: number): Promise<void> => {
     await apiClient.delete(`/users/${id}`);
+  },
+};
+
+export const shiftsApi = {
+  getAvailableShifts: async (): Promise<any[]> => {
+    const res = await apiClient.get<ApiResponse<any[]>>('/shifts');
+    return res.data.data;
+  },
+  createShiftChangeRequest: async (data: { requestedShift: string; reason?: string }): Promise<any> => {
+    const res = await apiClient.post<ApiResponse<any>>('/shifts/requests', data);
+    return res.data.data;
+  },
+  getMyShiftRequests: async (): Promise<any[]> => {
+    const res = await apiClient.get<ApiResponse<any[]>>('/shifts/requests/my');
+    return res.data.data;
+  },
+  getPendingShiftRequests: async (): Promise<any[]> => {
+    const res = await apiClient.get<ApiResponse<any[]>>('/shifts/requests/pending');
+    return res.data.data;
+  },
+  getAllShiftRequests: async (): Promise<any[]> => {
+    const res = await apiClient.get<ApiResponse<any[]>>('/shifts/requests');
+    return res.data.data;
+  },
+  reviewShiftChangeRequest: async (id: number, data: { status: 'APPROVED' | 'REJECTED'; adminNotes?: string }): Promise<any> => {
+    const res = await apiClient.post<ApiResponse<any>>(`/shifts/requests/${id}/review`, data);
+    return res.data.data;
   },
 };
 

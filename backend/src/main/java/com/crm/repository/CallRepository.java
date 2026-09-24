@@ -25,7 +25,9 @@ public interface CallRepository extends JpaRepository<Call, Long> {
            "(:userId IS NULL OR c.user.id = :userId) AND " +
            "(:leadId IS NULL OR l.id = :leadId) AND " +
            "(:projectId IS NULL OR l.project.id = :projectId) AND " +
-           "(:status IS NULL OR c.callStatus = :status) AND " +
+           "(:status IS NULL OR " +
+           "  (:status = 'CONNECTED' AND (c.callStatus = 'CONNECTED' OR c.isConnected = true OR c.durationSeconds > 0)) OR " +
+           "  (:status <> 'CONNECTED' AND c.callStatus = :status)) AND " +
            "(:outcome IS NULL OR c.businessOutcome = :outcome) AND " +
            "(:startDate IS NULL OR c.createdAt >= :startDate) AND " +
            "(:endDate IS NULL OR c.createdAt <= :endDate)")
@@ -46,6 +48,12 @@ public interface CallRepository extends JpaRepository<Call, Long> {
 
     long countByUserIdAndCreatedAtBetween(Long userId, LocalDateTime start, LocalDateTime end);
     long countByUserIdAndCallStatusAndCreatedAtBetween(Long userId, String callStatus, LocalDateTime start, LocalDateTime end);
+
+    @Query("SELECT COUNT(c) FROM Call c WHERE c.user.id = :userId AND (c.isConnected = true OR c.callStatus = 'CONNECTED' OR c.durationSeconds > 0) AND c.createdAt >= :start AND c.createdAt <= :end")
+    long countConnectedCallsForUserToday(@Param("userId") Long userId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    @Query("SELECT COUNT(c) FROM Call c WHERE (c.isConnected = true OR c.callStatus = 'CONNECTED' OR c.durationSeconds > 0)")
+    long countTotalConnectedCalls();
 
     @Query("SELECT COALESCE(SUM(c.durationSeconds), 0) FROM Call c WHERE c.user.id = :userId")
     long sumDurationByUserId(@Param("userId") Long userId);

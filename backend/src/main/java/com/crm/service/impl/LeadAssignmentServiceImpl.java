@@ -12,6 +12,7 @@ import com.crm.repository.LeadRepository;
 import com.crm.repository.UserRepository;
 import com.crm.service.AuditService;
 import com.crm.service.LeadAssignmentService;
+import com.crm.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,7 @@ public class LeadAssignmentServiceImpl implements LeadAssignmentService {
     private final UserRepository userRepository;
     private final LeadMapper leadMapper;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -65,6 +67,9 @@ public class LeadAssignmentServiceImpl implements LeadAssignmentService {
 
         auditService.logAction(assignerId, "Lead", lead.getId(), "ASSIGN", null,
                 "Assigned to: " + targetUser.getName());
+
+        // Notify assigned user
+        notificationService.createLeadAssignedNotification(lead, targetUser);
 
         return leadMapper.toAssignmentHistoryResponse(saved);
     }
@@ -112,6 +117,9 @@ public class LeadAssignmentServiceImpl implements LeadAssignmentService {
         auditService.logAction(assignerId, "Lead", lead.getId(), "REASSIGN",
                 "Previous Owner: " + oldOwnerName,
                 "New Owner: " + newUser.getName());
+
+        // Notify new assigned user
+        notificationService.createLeadAssignedNotification(lead, newUser);
 
         return leadMapper.toAssignmentHistoryResponse(saved);
     }

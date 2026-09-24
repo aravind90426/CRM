@@ -15,6 +15,7 @@ import java.util.Optional;
 public interface SalesRepository extends JpaRepository<Sale, Long> {
     Optional<Sale> findByLeadId(Long leadId);
     List<Sale> findByUserIdOrderByConvertedAtDesc(Long userId);
+    List<Sale> findAllByOrderByConvertedAtDesc();
 
     long countByUserId(Long userId);
 

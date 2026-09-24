@@ -168,7 +168,7 @@ export const ProjectsPage: React.FC = () => {
                   style={{ gap: '6px' }}
                 >
                   <Users size={14} />
-                  <span>View Project Leads</span>
+                  <span>View Project Leads ({proj.totalLeads ?? (proj as any).assignedLeadsCount ?? 0})</span>
                   <ArrowUpRight size={14} />
                 </button>
 

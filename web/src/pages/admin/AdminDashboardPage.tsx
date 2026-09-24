@@ -347,6 +347,7 @@ export const AdminDashboardPage: React.FC = () => {
           subtitle={`${summary?.assignedLeads ?? 0} assigned • ${summary?.unassignedLeads ?? 0} unassigned`}
           icon={<Users size={22} />}
           variant="primary"
+          onClick={() => navigate('/leads')}
         />
         <StatCard
           title="Calls Today"
@@ -354,6 +355,7 @@ export const AdminDashboardPage: React.FC = () => {
           subtitle={`${connectedRate}% connect rate (${summary?.connectedCalls ?? 0} connected)`}
           icon={<PhoneCall size={22} />}
           variant="success"
+          onClick={() => navigate('/admin/calls')}
         />
         <StatCard
           title="Interested Prospects"
@@ -361,6 +363,7 @@ export const AdminDashboardPage: React.FC = () => {
           subtitle="Qualified high-intent leads"
           icon={<TrendingUp size={22} />}
           variant="info"
+          onClick={() => navigate('/leads')}
         />
         <StatCard
           title="Sales Converted"
@@ -368,6 +371,7 @@ export const AdminDashboardPage: React.FC = () => {
           subtitle={`${conversionRate}% conversion rate`}
           icon={<Award size={22} />}
           variant="warning"
+          onClick={() => navigate('/admin/reports')}
         />
       </div>
 

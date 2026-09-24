@@ -21,4 +21,9 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
 
     List<Project> findByStatus(String status);
     long countByStatus(String status);
+
+    @Query("SELECT DISTINCT l.project FROM Lead l WHERE l.id IN " +
+           "(SELECT a.lead.id FROM LeadAssignment a WHERE a.user.id = :userId AND a.isActive = true) " +
+           "AND l.project.status = 'ACTIVE'")
+    List<Project> findActiveProjectsAssignedToUser(@Param("userId") Long userId);
 }

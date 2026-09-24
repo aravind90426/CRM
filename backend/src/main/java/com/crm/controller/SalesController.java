@@ -37,4 +37,10 @@ public class SalesController {
         List<SaleResponse> responses = salesService.getSalesByUser(principal.getId());
         return ResponseEntity.ok(ApiResponse.ok(responses));
     }
+
+    @GetMapping("/sales/all")
+    public ResponseEntity<ApiResponse<List<SaleResponse>>> getAllSales(@CurrentUser UserPrincipal principal) {
+        List<SaleResponse> responses = salesService.getAllSales();
+        return ResponseEntity.ok(ApiResponse.ok(responses));
+    }
 }

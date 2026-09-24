@@ -14,4 +14,7 @@ public interface ReportService {
     List<Map<String, Object>> getEmployeeActivityReport();
     List<Map<String, Object>> getProjectReport();
     List<Map<String, Object>> getSalesReport(LocalDateTime start, LocalDateTime end);
+
+    AdminAnalyticsDashboardResponse getAdminAnalyticsDashboard(Long projectId, Long userId, String leadStatus, String callStatus, String callDirection, LocalDateTime start, LocalDateTime end);
+    byte[] exportReportCsv(String reportType, Long projectId, Long userId, String leadStatus, String callStatus, String callDirection, LocalDateTime start, LocalDateTime end);
 }

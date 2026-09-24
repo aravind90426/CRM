@@ -22,6 +22,8 @@ import { Button } from '../../components/common/Button';
 import { useAuth } from '../../context/AuthContext';
 import { authApi } from '../../api/authApi';
 import { usersApi } from '../../api/usersApi';
+import { shiftApi } from '../../api/shiftApi';
+import { ShiftChangeRequest, ShiftOption } from '../../types';
 import { getApiBaseUrl, setApiBaseUrl } from '../../api/client';
 import { API_BASE_URL, STORAGE_KEYS } from '../../config/constants';
 
@@ -35,6 +37,14 @@ export const SettingsScreen: React.FC = () => {
   const [editName, setEditName] = useState(user?.name || '');
   const [editPhone, setEditPhone] = useState(user?.phone || '');
   const [profileSaving, setProfileSaving] = useState(false);
+
+  // Work Shift state
+  const [showShiftForm, setShowShiftForm] = useState(false);
+  const [shiftRequests, setShiftRequests] = useState<ShiftChangeRequest[]>([]);
+  const [availableShifts, setAvailableShifts] = useState<ShiftOption[]>([]);
+  const [selectedShift, setSelectedShift] = useState<string>('SHIFT_0930_1830');
+  const [shiftReason, setShiftReason] = useState('');
+  const [shiftSubmitting, setShiftSubmitting] = useState(false);
 
   // Request Admin Access state
   const [adminRequestStatus, setAdminRequestStatus] = useState<
@@ -60,6 +70,23 @@ export const SettingsScreen: React.FC = () => {
     }
   }, [user]);
 
+  const loadShiftData = async () => {
+    try {
+      const [shifts, requests] = await Promise.all([
+        shiftApi.getAvailableShifts(),
+        shiftApi.getMyShiftRequests(),
+      ]);
+      setAvailableShifts(shifts || []);
+      setShiftRequests(requests || []);
+    } catch (e) {
+      // Non-blocking
+    }
+  };
+
+  React.useEffect(() => {
+    loadShiftData();
+  }, []);
+
   React.useEffect(() => {
     if (!isAdmin) {
       usersApi.getAdminAccessStatus().then((res) => {
@@ -69,6 +96,30 @@ export const SettingsScreen: React.FC = () => {
       }).catch(() => {});
     }
   }, [isAdmin]);
+
+  const handleRequestShiftChange = async () => {
+    if (!selectedShift) {
+      Alert.alert('Validation Error', 'Please select a shift.');
+      return;
+    }
+
+    setShiftSubmitting(true);
+    try {
+      await shiftApi.createShiftChangeRequest({
+        requestedShift: selectedShift,
+        reason: shiftReason.trim() || undefined,
+      });
+      Alert.alert('Success', 'Shift change request submitted for Admin approval.');
+      setShiftReason('');
+      setShowShiftForm(false);
+      await loadShiftData();
+      if (refreshProfile) await refreshProfile();
+    } catch (err: any) {
+      Alert.alert('Request Failed', err.message || 'Unable to submit shift change request.');
+    } finally {
+      setShiftSubmitting(false);
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (!editName.trim()) {
@@ -306,6 +357,108 @@ export const SettingsScreen: React.FC = () => {
                   </Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          )}
+
+          <View style={styles.menuDivider} />
+
+          {/* Work Shift */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            activeOpacity={0.7}
+            onPress={() => setShowShiftForm(!showShiftForm)}
+          >
+            <IconTile name="time" variant="purple" size={38} iconSize={18} />
+            <View style={styles.menuInfo}>
+              <Text style={styles.menuTitle}>Work Shift</Text>
+              <Text style={styles.menuSubtitle}>{user?.shiftDisplayName || '10:00 AM – 07:00 PM'}</Text>
+            </View>
+            <Ionicons
+              name={showShiftForm ? 'chevron-up' : 'chevron-forward'}
+              size={18}
+              color="#9CA3AF"
+            />
+          </TouchableOpacity>
+
+          {showShiftForm && (
+            <View style={styles.embeddedForm}>
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600', marginBottom: 4 }}>
+                  Current Assigned Shift
+                </Text>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary }}>
+                  {user?.shiftDisplayName || '10:00 AM – 07:00 PM'}
+                </Text>
+              </View>
+
+              {shiftRequests.length > 0 && (
+                <View style={{ marginBottom: 14, padding: 10, backgroundColor: colors.surfaceElevated, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600' }}>Latest Request Status:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: shiftRequests[0].status === 'APPROVED' ? colors.success : shiftRequests[0].status === 'PENDING' ? '#eab308' : colors.danger, marginTop: 2 }}>
+                    {shiftRequests[0].status === 'PENDING' ? 'Pending Admin Approval' : shiftRequests[0].status} ({shiftRequests[0].requestedShiftDisplayName})
+                  </Text>
+                </View>
+              )}
+
+              <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600', marginBottom: 8 }}>
+                Select New Shift
+              </Text>
+              <View style={{ gap: 6, marginBottom: 12 }}>
+                {[
+                  { id: 'SHIFT_1000_1900', label: '10:00 AM – 07:00 PM' },
+                  { id: 'SHIFT_0900_1800', label: '09:00 AM – 06:00 PM' },
+                  { id: 'SHIFT_0930_1830', label: '09:30 AM – 06:30 PM' },
+                ].map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 8,
+                      backgroundColor: colors.surfaceElevated,
+                      borderWidth: 1,
+                      borderColor: selectedShift === s.id ? colors.primary : colors.border,
+                    }}
+                    onPress={() => setSelectedShift(s.id)}
+                  >
+                    <Ionicons
+                      name="time-outline"
+                      size={14}
+                      color={selectedShift === s.id ? colors.primary : colors.textMuted}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: selectedShift === s.id ? '700' : '500',
+                        color: selectedShift === s.id ? colors.primary : colors.textSecondary,
+                      }}
+                    >
+                      {s.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Input
+                label="Reason (Optional)"
+                placeholder="Why are you requesting this shift change?"
+                value={shiftReason}
+                onChangeText={setShiftReason}
+                multiline
+              />
+
+              <Button
+                title={shiftRequests.some((r) => r.status === 'PENDING') ? 'Shift Change Request Pending' : 'Submit Shift Request'}
+                onPress={handleRequestShiftChange}
+                disabled={shiftSubmitting || shiftRequests.some((r) => r.status === 'PENDING')}
+                loading={shiftSubmitting}
+                variant="primary"
+                size="sm"
+                style={{ marginTop: 6 }}
+              />
             </View>
           )}
 

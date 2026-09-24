@@ -5,8 +5,38 @@ export interface User {
   phone?: string;
   role: string; // 'ROLE_ADMIN' | 'ROLE_USER'
   status: 'ACTIVE' | 'INACTIVE';
+  shift?: string;
+  shiftDisplayName?: string;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface ShiftOption {
+  id: string;
+  displayName: string;
+  startTime: string;
+  endTime: string;
+  isDefault: boolean;
+}
+
+export interface ShiftChangeRequest {
+  id: number;
+  userId: number;
+  userName: string;
+  userEmail: string;
+  currentShift: string;
+  currentShiftDisplayName: string;
+  requestedShift: string;
+  requestedShiftDisplayName: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reason?: string;
+  adminNotes?: string;
+  requestedAt: string;
+  reviewedAt?: string;
+  reviewedById?: number;
+  reviewedByName?: string;
 }
 
 export interface JwtAuthResponse {
@@ -245,10 +275,16 @@ export interface Attendance {
   clockInTime?: string;
   clockOutTime?: string;
   durationMinutes: number;
-  status: 'PRESENT' | 'HALF_DAY' | 'LEAVE' | 'HOLIDAY' | 'NOT_CLOCKED_IN';
+  status: 'PRESENT' | 'HALF_DAY' | 'LEAVE' | 'HOLIDAY' | 'NOT_CLOCKED_IN' | string;
   notes?: string;
   clockedIn: boolean;
   clockedOut: boolean;
+  shift?: string;
+  shiftDisplayName?: string;
+  shiftStartTime?: string;
+  shiftEndTime?: string;
+  checkInOverdue?: boolean;
+  serverTime?: string;
 }
 
 export interface AttendanceMonthlyResponse {

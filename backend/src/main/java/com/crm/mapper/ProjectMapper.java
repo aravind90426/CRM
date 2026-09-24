@@ -18,6 +18,7 @@ public class ProjectMapper {
                 .createdAt(project.getCreatedAt())
                 .totalLeads(totalLeads)
                 .assignedLeads(assignedLeads)
+                .assignedLeadsCount(totalLeads)
                 .convertedLeads(convertedLeads)
                 .build();
     }

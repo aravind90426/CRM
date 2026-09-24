@@ -25,4 +25,14 @@ public class LeadSummaryResponse {
     private Long currentOwnerId;
     private String currentOwnerName;
     private LocalDateTime createdAt;
+
+    public UserResponse getCurrentOwner() {
+        if (currentOwnerId == null && currentOwnerName == null) {
+            return null;
+        }
+        return UserResponse.builder()
+                .id(currentOwnerId)
+                .name(currentOwnerName)
+                .build();
+    }
 }

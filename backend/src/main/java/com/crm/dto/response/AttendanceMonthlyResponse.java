@@ -14,8 +14,11 @@ import java.util.List;
 public class AttendanceMonthlyResponse {
     private int year;
     private int month;
+    private long totalDays;
     private long presentDays;
+    private long fullDays;
     private long halfDays;
+    private long offDays;
     private long leaveDays;
     private long holidayDays;
     private long totalWorkingHours;

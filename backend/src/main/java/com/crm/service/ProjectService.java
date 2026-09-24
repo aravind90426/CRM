@@ -15,5 +15,6 @@ public interface ProjectService {
     ProjectResponse getProjectById(Long id);
     Page<ProjectResponse> searchProjects(String search, String status, Pageable pageable);
     List<ProjectResponse> getActiveProjects();
+    List<ProjectResponse> getUserAssignedProjects(Long userId);
     void deleteProject(Long id, Long currentUserId);
 }

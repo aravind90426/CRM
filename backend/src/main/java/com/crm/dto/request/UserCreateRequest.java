@@ -27,4 +27,6 @@ public class UserCreateRequest {
     private String role; // ADMIN or USER
 
     private String status; // ACTIVE or INACTIVE
+
+    private String shift; // e.g. SHIFT_1000_1900, "10:00 AM – 07:00 PM", etc.
 }

@@ -92,4 +92,12 @@ public class SalesServiceImpl implements SalesService {
                 .map(saleMapper::toResponse)
                 .toList();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<SaleResponse> getAllSales() {
+        return salesRepository.findAllByOrderByConvertedAtDesc().stream()
+                .map(saleMapper::toResponse)
+                .toList();
+    }
 }

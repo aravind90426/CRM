@@ -11,4 +11,5 @@ public interface SalesService {
     SaleResponse convertLead(Long leadId, ConversionRequest request, Long userId, boolean isAdmin);
     Optional<Sale> getSaleByLead(Long leadId);
     List<SaleResponse> getSalesByUser(Long userId);
+    List<SaleResponse> getAllSales();
 }

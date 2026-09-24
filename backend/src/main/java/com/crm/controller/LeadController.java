@@ -35,6 +35,8 @@ public class LeadController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String outcome,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) Boolean assignedToMe,
+            @RequestParam(required = false) Long assignedUserId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
@@ -43,7 +45,7 @@ public class LeadController {
 
         Sort sort = direction.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
         Page<LeadSummaryResponse> result = leadService.searchLeads(projectId, status, outcome, search,
-                principal.getId(), principal.isAdmin(), PageRequest.of(page, size, sort));
+                assignedToMe, assignedUserId, principal.getId(), principal.isAdmin(), PageRequest.of(page, size, sort));
 
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(result)));
     }

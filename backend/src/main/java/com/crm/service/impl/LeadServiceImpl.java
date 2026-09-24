@@ -188,11 +188,21 @@ public class LeadServiceImpl implements LeadService {
     @Transactional(readOnly = true)
     public Page<LeadSummaryResponse> searchLeads(Long projectId, String status, String outcome, String search,
                                                 Long currentUserId, boolean isAdmin, Pageable pageable) {
+        return searchLeads(projectId, status, outcome, search, null, null, currentUserId, isAdmin, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<LeadSummaryResponse> searchLeads(Long projectId, String status, String outcome, String search,
+                                                Boolean assignedToMe, Long assignedUserId,
+                                                Long currentUserId, boolean isAdmin, Pageable pageable) {
         Page<Lead> leads;
-        if (isAdmin) {
-            leads = leadRepository.searchLeads(projectId, status, outcome, search, pageable);
-        } else {
+        if (Boolean.TRUE.equals(assignedToMe) || !isAdmin) {
             leads = leadRepository.searchAssignedLeads(currentUserId, projectId, status, outcome, search, pageable);
+        } else if (assignedUserId != null) {
+            leads = leadRepository.searchAssignedLeads(assignedUserId, projectId, status, outcome, search, pageable);
+        } else {
+            leads = leadRepository.searchLeads(projectId, status, outcome, search, pageable);
         }
 
         return leads.map(lead -> {

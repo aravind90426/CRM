@@ -7,6 +7,7 @@ interface StatCardProps {
   icon: ReactNode;
   variant?: 'primary' | 'success' | 'warning' | 'info' | 'danger';
   trend?: string;
+  onClick?: () => void;
 }
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -16,6 +17,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   icon,
   variant = 'primary',
   trend,
+  onClick,
 }) => {
   const getGlowColor = () => {
     switch (variant) {
@@ -40,10 +42,12 @@ export const StatCard: React.FC<StatCardProps> = ({
   return (
     <div
       className="card stat-card"
+      onClick={onClick}
       style={{
         position: 'relative',
         overflow: 'hidden',
         boxShadow: `0 4px 20px -2px ${getGlowColor()}`,
+        cursor: onClick ? 'pointer' : undefined,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>

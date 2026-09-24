@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -79,6 +80,20 @@ public class DataInitializer implements CommandLineRunner {
                     .status("ACTIVE")
                     .build());
         });
+
+        // Ensure all existing users and admins have default shift assigned (10:00 AM – 07:00 PM)
+        try {
+            List<User> allUsers = userRepository.findAll();
+            for (User u : allUsers) {
+                if (u.getShift() == null) {
+                    u.setShift(WorkShift.SHIFT_1000_1900);
+                    userRepository.save(u);
+                    logger.info("Updated shift for existing user {} ({}) to {}", u.getName(), u.getEmail(), WorkShift.SHIFT_1000_1900.getDisplayName());
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not backfill user shifts: {}", e.getMessage());
+        }
 
         // Ensure default users are provisioned in Firebase Authentication
         try {

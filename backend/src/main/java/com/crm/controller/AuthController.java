@@ -49,6 +49,10 @@ public class AuthController {
                 .email(userPrincipal.getEmail())
                 .role(userPrincipal.getRole())
                 .status(userPrincipal.getStatus())
+                .shift(userPrincipal.getShift())
+                .shiftDisplayName(userPrincipal.getShiftDisplayName())
+                .shiftStartTime(userPrincipal.getShiftStartTime())
+                .shiftEndTime(userPrincipal.getShiftEndTime())
                 .build();
 
         return ResponseEntity.ok(ApiResponse.ok("Login successful", authResponse));
@@ -65,5 +69,15 @@ public class AuthController {
                                                              @Valid @RequestBody ChangePasswordRequest request) {
         userService.changePassword(principal.getId(), request);
         return ResponseEntity.ok(ApiResponse.ok("Password updated successfully", null));
+    }
+
+    @PutMapping("/profile")
+    public ResponseEntity<ApiResponse<UserResponse>> updateProfile(@CurrentUser UserPrincipal principal,
+                                                                   @Valid @RequestBody com.crm.dto.request.UserUpdateRequest request) {
+        UserResponse current = userService.getUserById(principal.getId());
+        request.setRole(current.getRole());
+        request.setStatus(current.getStatus());
+        UserResponse response = userService.updateUser(principal.getId(), request, principal.getId());
+        return ResponseEntity.ok(ApiResponse.ok("Profile updated successfully", response));
     }
 }

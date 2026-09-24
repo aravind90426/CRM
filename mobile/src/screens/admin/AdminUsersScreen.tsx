@@ -47,6 +47,7 @@ export const AdminUsersScreen: React.FC = () => {
   const [newPhone, setNewPhone] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<'ROLE_USER' | 'ROLE_ADMIN'>('ROLE_USER');
+  const [newShift, setNewShift] = useState<string>('SHIFT_1000_1900');
   const [submitting, setSubmitting] = useState(false);
 
   // Edit Modal
@@ -55,6 +56,7 @@ export const AdminUsersScreen: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editRole, setEditRole] = useState<'ROLE_USER' | 'ROLE_ADMIN'>('ROLE_USER');
+  const [editShift, setEditShift] = useState<string>('SHIFT_1000_1900');
 
   const fetchUsers = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -88,6 +90,7 @@ export const AdminUsersScreen: React.FC = () => {
     setNewPhone('');
     setNewPassword('');
     setNewRole('ROLE_USER');
+    setNewShift('SHIFT_1000_1900');
     setCreateModalVisible(true);
   };
 
@@ -109,6 +112,7 @@ export const AdminUsersScreen: React.FC = () => {
         phone: newPhone.trim() || undefined,
         password: newPassword,
         role: newRole,
+        shift: newShift,
       });
       Alert.alert('Success', 'User created successfully.');
       setCreateModalVisible(false);
@@ -125,6 +129,7 @@ export const AdminUsersScreen: React.FC = () => {
     setEditName(user.name);
     setEditPhone(user.phone || '');
     setEditRole(user.role === 'ROLE_ADMIN' ? 'ROLE_ADMIN' : 'ROLE_USER');
+    setEditShift(user.shift || 'SHIFT_1000_1900');
     setEditModalVisible(true);
   };
 
@@ -141,6 +146,7 @@ export const AdminUsersScreen: React.FC = () => {
         name: editName.trim(),
         phone: editPhone.trim() || undefined,
         role: editRole,
+        shift: editShift,
       });
       Alert.alert('Success', 'User profile updated.');
       setEditModalVisible(false);
@@ -229,6 +235,11 @@ export const AdminUsersScreen: React.FC = () => {
                 {item.phone}
               </Text>
             ) : null}
+
+            <View style={styles.shiftBadge}>
+              <Ionicons name="time-outline" size={11} color={colors.textSecondary} />
+              <Text style={styles.shiftBadgeText}>{item.shiftDisplayName || '10:00 AM – 07:00 PM'}</Text>
+            </View>
           </View>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ alignSelf: 'center', marginLeft: 4 }} />
         </TouchableOpacity>
@@ -474,6 +485,40 @@ export const AdminUsersScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </View>
+
+        <View style={styles.rolePickerContainer}>
+          <Text style={styles.fieldLabel}>Work Shift *</Text>
+          <View style={styles.shiftPickerColumn}>
+            {[
+              { id: 'SHIFT_1000_1900', label: '10:00 AM – 07:00 PM (Default)' },
+              { id: 'SHIFT_0900_1800', label: '09:00 AM – 06:00 PM' },
+              { id: 'SHIFT_0930_1830', label: '09:30 AM – 06:30 PM' },
+            ].map((s) => (
+              <TouchableOpacity
+                key={s.id}
+                style={[
+                  styles.shiftOption,
+                  newShift === s.id && styles.roleOptionActive,
+                ]}
+                onPress={() => setNewShift(s.id)}
+              >
+                <Ionicons
+                  name="time-outline"
+                  size={14}
+                  color={newShift === s.id ? colors.primary : colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.roleOptionText,
+                    newShift === s.id && styles.roleOptionTextActive,
+                  ]}
+                >
+                  {s.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
       </FormModal>
 
       {/* Edit User Modal */}
@@ -485,8 +530,8 @@ export const AdminUsersScreen: React.FC = () => {
         saveTitle="Save"
         saveLoading={submitting}
         saveVariant="primary"
-        heightPercent={0.82}
-        maxHeightPixels={580}
+        heightPercent={0.88}
+        maxHeightPixels={620}
       >
         <Input
           label="Full Name *"
@@ -547,6 +592,40 @@ export const AdminUsersScreen: React.FC = () => {
                 Admin
               </Text>
             </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.rolePickerContainer}>
+          <Text style={styles.fieldLabel}>Work Shift *</Text>
+          <View style={styles.shiftPickerColumn}>
+            {[
+              { id: 'SHIFT_1000_1900', label: '10:00 AM – 07:00 PM' },
+              { id: 'SHIFT_0900_1800', label: '09:00 AM – 06:00 PM' },
+              { id: 'SHIFT_0930_1830', label: '09:30 AM – 06:30 PM' },
+            ].map((s) => (
+              <TouchableOpacity
+                key={s.id}
+                style={[
+                  styles.shiftOption,
+                  editShift === s.id && styles.roleOptionActive,
+                ]}
+                onPress={() => setEditShift(s.id)}
+              >
+                <Ionicons
+                  name="time-outline"
+                  size={14}
+                  color={editShift === s.id ? colors.primary : colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.roleOptionText,
+                    editShift === s.id && styles.roleOptionTextActive,
+                  ]}
+                >
+                  {s.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
       </FormModal>
@@ -820,6 +899,39 @@ const styles = StyleSheet.create({
   roleOptionTextActive: {
     color: colors.primary,
     fontWeight: '700',
+  },
+  shiftBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginTop: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  shiftBadgeText: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  shiftPickerColumn: {
+    flexDirection: 'column',
+    gap: 6,
+  },
+  shiftOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: spacing.borderRadius.sm,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   modalActions: {
     flexDirection: 'row',

@@ -303,6 +303,7 @@ public class CallTrackingServiceImpl implements CallTrackingService {
         List<Call> calls = callRepository.findByLeadIdOrderByCreatedAtDesc(leadId);
         for (Call c : calls) {
             LocalDateTime ts = c.getStartedAt() != null ? c.getStartedAt() : c.getCreatedAt();
+            String techStatus = c.getCallLifecycleStatus() != null ? c.getCallLifecycleStatus() : (Boolean.TRUE.equals(c.getIsConnected()) ? "CONNECTED" : "MISSED");
             timeline.add(LeadTimelineItemResponse.builder()
                     .type("CALL")
                     .id(c.getId())
@@ -312,7 +313,7 @@ public class CallTrackingServiceImpl implements CallTrackingService {
                     .timestamp(ts)
                     .durationSeconds(c.getDurationSeconds())
                     .callDirection(c.getCallDirection())
-                    .technicalStatus(c.getCallStatus())
+                    .technicalStatus(techStatus)
                     .businessClassification(c.getFinalClassification())
                     .classificationChangedManually(c.getClassificationChangedManually())
                     .notes(c.getNotes())

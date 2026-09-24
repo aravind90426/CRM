@@ -179,7 +179,12 @@ export const AttendanceCard: React.FC<AttendanceCardProps> = ({
           <View style={styles.iconCircle}>
             <Ionicons name="time" size={20} color="#FFFFFF" />
           </View>
-          <Text style={styles.title}>Today's Attendance</Text>
+          <View>
+            <Text style={styles.title}>Today's Attendance</Text>
+            <Text style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.85)', fontWeight: '600', marginTop: 1 }}>
+              Shift: {attendance?.shiftDisplayName || '10:00 AM – 07:00 PM'}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.headerRight}>

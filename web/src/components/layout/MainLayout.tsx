@@ -5,6 +5,7 @@ import { Navbar } from './Navbar';
 import { MobileBottomNav } from './MobileBottomNav';
 import { useAuth } from '../../context/AuthContext';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { EmergencyCheckInModal } from '../attendance/EmergencyCheckInModal';
 
 export const MainLayout: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -25,6 +26,9 @@ export const MainLayout: React.FC = () => {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', background: 'var(--bg-main)' }}>
+      {/* Mandatory Emergency Check-In Alert (User & Admin) */}
+      <EmergencyCheckInModal />
+
       {/* Sidebar Navigation */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 

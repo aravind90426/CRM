@@ -41,6 +41,11 @@ public class User {
     @Builder.Default
     private String status = "ACTIVE"; // ACTIVE, INACTIVE
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "shift", nullable = false, length = 50)
+    @Builder.Default
+    private WorkShift shift = WorkShift.SHIFT_1000_1900;
+
     @com.fasterxml.jackson.annotation.JsonIgnore
     @Column(name = "firebase_uid", length = 128)
     private String firebaseUid;

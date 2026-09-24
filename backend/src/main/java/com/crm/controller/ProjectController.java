@@ -43,8 +43,16 @@ public class ProjectController {
     }
 
     @GetMapping("/active")
-    public ResponseEntity<ApiResponse<List<ProjectResponse>>> getActiveProjects() {
+    public ResponseEntity<ApiResponse<List<ProjectResponse>>> getActiveProjects(@CurrentUser UserPrincipal principal) {
+        if (principal != null && !principal.isAdmin()) {
+            return ResponseEntity.ok(ApiResponse.ok(projectService.getUserAssignedProjects(principal.getId())));
+        }
         return ResponseEntity.ok(ApiResponse.ok(projectService.getActiveProjects()));
+    }
+
+    @GetMapping("/my-projects")
+    public ResponseEntity<ApiResponse<List<ProjectResponse>>> getMyProjects(@CurrentUser UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.ok(projectService.getUserAssignedProjects(principal.getId())));
     }
 
     @GetMapping("/{id}")
